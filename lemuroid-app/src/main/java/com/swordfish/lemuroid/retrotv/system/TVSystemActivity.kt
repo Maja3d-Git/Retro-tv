@@ -137,10 +137,10 @@ private fun TvButton(
                 .clip(RoundedCornerShape(24.dp))
                 .background(bg)
                 .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
-                .padding(horizontal = 22.dp),
+                .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
     }
 }
 
@@ -190,7 +190,7 @@ private fun InfoRow(
     valueColor: Color = K.text,
 ) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Text(label, color = K.muted, fontSize = 15.sp, modifier = Modifier.width(240.dp))
+        Text(label, color = K.muted, fontSize = 15.sp, modifier = Modifier.width(200.dp))
         Text(value, color = valueColor, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     }
 }
@@ -232,7 +232,7 @@ private fun SystemScreen(
     Row(Modifier.fillMaxSize().background(K.bg)) {
         Column(
             Modifier
-                .width(260.dp)
+                .width(220.dp)
                 .fillMaxHeight()
                 .background(K.nav)
                 .padding(horizontal = 16.dp, vertical = 28.dp),
@@ -280,7 +280,7 @@ private fun SystemScreen(
             )
         }
 
-        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 40.dp, vertical = 32.dp)) {
+        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 32.dp, vertical = 28.dp)) {
             when (section) {
                 Section.UPDATES -> UpdatesSection(activity, startUpdate)
                 Section.NETWORK -> NetworkSection()
@@ -547,11 +547,11 @@ private fun LogsSection() {
         onDispose { server.stop() }
     }
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             SectionTitle("Dziennik", "Najnowsze wpisy na górze · ${lines.size} pozycji")
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-                TvButton(if (onlyProblems) "Pokaż wszystko" else "Tylko błędy i ostrzeżenia", onClick = { onlyProblems = !onlyProblems })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
+                TvButton(if (onlyProblems) "Wszystko" else "Tylko błędy", onClick = { onlyProblems = !onlyProblems })
                 TvButton("Odśwież", onClick = { version++ })
                 TvButton("Wyczyść", onClick = {
                     RetroTvLog.clear(context)
@@ -571,7 +571,7 @@ private fun LogsSection() {
         }
         Column(
             Modifier
-                .width(280.dp)
+                .width(230.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(K.card)
                 .padding(20.dp),
@@ -581,7 +581,7 @@ private fun LogsSection() {
             Text("Wyślij na telefon", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             if (ip != null) {
                 val url = server.url(ip)
-                QrImage(url, Modifier.size(220.dp))
+                QrImage(url, Modifier.size(180.dp))
                 Text(
                     "Zeskanuj aparatem telefonu w tej samej sieci Wi-Fi. Dziennik otworzy się w przeglądarce.",
                     color = K.muted,

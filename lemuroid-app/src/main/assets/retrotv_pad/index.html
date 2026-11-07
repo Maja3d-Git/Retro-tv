@@ -81,13 +81,23 @@ const params=new URLSearchParams(location.search);
 const key=params.get("k")||"";
 let id=null;try{id=localStorage.getItem("rtv-id")}catch(e){}
 if(!id){id=Math.random().toString(36).slice(2,12);try{localStorage.setItem("rtv-id",id)}catch(e){}}
-const name=(/iPhone|iPad/.test(navigator.userAgent)?"iPhone":/Android/.test(navigator.userAgent)?"Telefon z Androidem":"Telefon");
+const name=window.RetroTVNative?"Retro TV na telefonie":(/iPhone|iPad/.test(navigator.userAgent)?"iPhone":/Android/.test(navigator.userAgent)?"Telefon z Androidem":"Telefon");
 const $=s=>document.querySelector(s);
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
-function buzz(){try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}}
+const NATIVE=window.RetroTVNative||null;
+function buzz(){try{if(NATIVE){NATIVE.buzz();return}navigator.vibrate&&navigator.vibrate(12)}catch(e){}}
+// Aplikacja Retro TV na telefonie: połączenie obsługuje kod natywny (sieć domowa albo internet).
+function nativeSocket(){
+  const s={readyState:0,send:t=>NATIVE.send(t),close:()=>{}};
+  window.rtvNative={open:()=>{s.readyState=1;s.onopen&&s.onopen()},msg:d=>{s.onmessage&&s.onmessage({data:d})},
+    close:(c,r)=>{s.readyState=3;s.onclose&&s.onclose({code:c,reason:r})},
+    status:t=>{const p=$("#overlay p");if(p)p.textContent=t}};
+  setTimeout(()=>NATIVE.connect(),0);
+  return s;
+}
 function connect(){
   const wsPort=(parseInt(location.port)||80)+1;
-  ws=new WebSocket("ws://"+location.hostname+":"+wsPort+"/pad?k="+encodeURIComponent(key));
+  ws=NATIVE?nativeSocket():new WebSocket("ws://"+location.hostname+":"+wsPort+"/pad?k="+encodeURIComponent(key));
   ws.onopen=()=>send({t:"hello",id:id,name:name});
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}
     if(m.t==="welcome"){connected=true;player=m.player;mode=m.mode;layout=m.mode==="menu"?"menu":(m.layout||"two");
@@ -153,7 +163,7 @@ function build(){
   (L.shr||[]).forEach(([t,c])=>{const b=document.createElement("button");b.className="sh";b.style.borderRadius="10px 22px 10px 10px";b.textContent=t;bindButton(b,c);sr.appendChild(b)});
   sh.append(sl,sr);sh.style.visibility=(L.sh&&L.sh.length)||(L.shr&&L.shr.length)?"visible":"hidden";
 }
-$("#upBtn").addEventListener("click",()=>{location.href="/upload?k="+encodeURIComponent(key)});
+$("#upBtn").addEventListener("click",()=>{if(NATIVE){NATIVE.pickFiles();return}location.href="/upload?k="+encodeURIComponent(key)});
 $("#menuBtn").addEventListener("click",()=>{buzz();send({t:"menu"})});
 $("#kbBtn").addEventListener("click",()=>{const k=$("#kbd");k.hidden=!k.hidden;if(!k.hidden)$("#kbIn").focus()});
 $("#kbSend").addEventListener("click",()=>{send({t:"text",v:$("#kbIn").value});$("#kbd").hidden=true;$("#kbIn").blur()});

@@ -125,6 +125,12 @@ class MainActivity : RetrogradeComponentActivity(), BusyActivity {
             finish()
             return
         }
+        // Retro TV: na telefonie najpierw ekran pada i wysyłania gier; emulator po wyborze przycisku.
+        if (!intent.getBooleanExtra(com.swordfish.lemuroid.retrotv.phone.PhoneHomeActivity.EXTRA_PHONE_EMULATOR, false)) {
+            startActivity(Intent(this, com.swordfish.lemuroid.retrotv.phone.PhoneHomeActivity::class.java))
+            finish()
+            return
+        }
 
         GlobalScope.safeLaunch {
             reviewManager.initialize(applicationContext)

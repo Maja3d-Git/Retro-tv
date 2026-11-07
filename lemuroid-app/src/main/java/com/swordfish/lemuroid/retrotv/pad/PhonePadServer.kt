@@ -69,7 +69,31 @@ object PhonePadServer {
     private var sink: PadSink? = null
     private lateinit var appContext: Context
 
-    private val clients = ConcurrentHashMap<WebSocket, PhoneInfo>()
+    /** Połączenie z telefonem – przez WebSocket w sieci domowej albo przez internet (MQTT). */
+    interface PadConn {
+        fun send(text: String)
+
+        fun close(
+            code: Int,
+            reason: String,
+        )
+    }
+
+    private class WsConn(val ws: WebSocket) : PadConn {
+        override fun send(text: String) {
+            runCatching { ws.send(text) }
+        }
+
+        override fun close(
+            code: Int,
+            reason: String,
+        ) {
+            runCatching { ws.close(code, reason) }
+        }
+    }
+
+    private val wsConns = ConcurrentHashMap<WebSocket, WsConn>()
+    private val clients = ConcurrentHashMap<PadConn, PhoneInfo>()
     private val phonesFlow = MutableStateFlow<List<PhoneInfo>>(emptyList())
     val phones: StateFlow<List<PhoneInfo>> = phonesFlow
 
@@ -206,6 +230,7 @@ object PhonePadServer {
             serveLoop(server)
             registerNsd(chosen)
             startWebSocket(chosen + 1, 0)
+            PadRelay.start(token(appContext))
             Timber.i("Pad w telefonie: strona na porcie %d (proces %s)", chosen, sink?.mode)
         }
     }
@@ -221,6 +246,8 @@ object PhonePadServer {
         // Zamykanie połączeń może chwilę potrwać – nie blokujemy wątku interfejsu.
         if (ws != null) thread(name = "retrotv-pad-stop", isDaemon = true) { runCatching { ws.stop(300) } }
         clients.clear()
+        wsConns.clear()
+        PadRelay.stop()
         phonesFlow.value = emptyList()
         sink = null
     }
@@ -456,7 +483,7 @@ object PhonePadServer {
     }
 
     private fun sendWelcome(
-        conn: WebSocket,
+        conn: PadConn,
         info: PhoneInfo,
     ) {
         val s = sink ?: return
@@ -467,7 +494,65 @@ object PhonePadServer {
                 .put("mode", s.mode)
                 .put("layout", s.layout)
                 .put("title", s.title)
-        runCatching { conn.send(json.toString()) }
+        conn.send(json.toString())
+    }
+
+    internal fun dropConn(conn: PadConn) {
+        clients.remove(conn)?.let { Timber.i("Telefon %s rozłączony", it.name) }
+        publish()
+    }
+
+    internal fun noteVisitor(label: String) {
+        val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.ROOT).format(java.util.Date())
+        lastVisitor.value = "$label · $time"
+    }
+
+    /** Wiadomość od telefonu – wspólna dla sieci domowej i internetu. */
+    internal fun handleMessage(
+        conn: PadConn,
+        message: String,
+        fallbackId: String,
+    ) {
+        val json = runCatching { JSONObject(message) }.getOrNull() ?: return
+        when (json.optString("t")) {
+            "hello" -> {
+                val id = json.optString("id").take(64).ifEmpty { fallbackId }
+                val name = json.optString("name", "Telefon").take(40)
+                val player = assignPlayer(id)
+                if (player == 0) {
+                    conn.close(4002, "Podłączono już $MAX_PHONES telefony")
+                    return
+                }
+                val info = PhoneInfo(id, name, player)
+                clients[conn] = info
+                Timber.i("Telefon %s połączony jako gracz %d", name, player)
+                publish()
+                sendWelcome(conn, info)
+            }
+            "k" -> {
+                val info = clients[conn] ?: return
+                val code = json.optInt("c")
+                val down = json.optInt("d") == 1
+                main.post { sink?.onKey(info.player, code, down) }
+            }
+            "m" -> {
+                val info = clients[conn] ?: return
+                val src = json.optString("s")
+                val x = json.optDouble("x", 0.0).toFloat().coerceIn(-1f, 1f)
+                val y = json.optDouble("y", 0.0).toFloat().coerceIn(-1f, 1f)
+                main.post { sink?.onMotion(info.player, src, x, y) }
+            }
+            "menu" -> {
+                val info = clients[conn] ?: return
+                main.post { sink?.onMenu(info.player) }
+            }
+            "text" -> {
+                if (clients[conn] == null) return
+                val text = json.optString("v").take(100)
+                main.post { sink?.onText(text) }
+            }
+            "ping" -> conn.send("{\"t\":\"pong\"}")
+        }
     }
 
     private fun publish() {
@@ -482,7 +567,9 @@ object PhonePadServer {
             val expected = token(appContext)
             if (!handshake.resourceDescriptor.contains("k=$expected")) {
                 conn.close(4001, "Nieprawidłowy kod – zeskanuj QR ponownie")
+                return
             }
+            runCatching { conn.remoteSocketAddress?.address?.hostAddress }.getOrNull()?.let { noteVisitor(it) }
         }
 
         override fun onClose(
@@ -491,54 +578,14 @@ object PhonePadServer {
             reason: String?,
             remote: Boolean,
         ) {
-            clients.remove(conn)?.let { Timber.i("Telefon %s rozłączony", it.name) }
-            publish()
+            wsConns.remove(conn)?.let { dropConn(it) }
         }
 
         override fun onMessage(
             conn: WebSocket,
             message: String,
         ) {
-            val json = runCatching { JSONObject(message) }.getOrNull() ?: return
-            when (json.optString("t")) {
-                "hello" -> {
-                    val id = json.optString("id").take(64).ifEmpty { conn.remoteSocketAddress.toString() }
-                    val name = json.optString("name", "Telefon").take(40)
-                    val player = assignPlayer(id)
-                    if (player == 0) {
-                        conn.close(4002, "Podłączono już $MAX_PHONES telefony")
-                        return
-                    }
-                    val info = PhoneInfo(id, name, player)
-                    clients[conn] = info
-                    Timber.i("Telefon %s połączony jako gracz %d", name, player)
-                    publish()
-                    sendWelcome(conn, info)
-                }
-                "k" -> {
-                    val info = clients[conn] ?: return
-                    val code = json.optInt("c")
-                    val down = json.optInt("d") == 1
-                    main.post { sink?.onKey(info.player, code, down) }
-                }
-                "m" -> {
-                    val info = clients[conn] ?: return
-                    val src = json.optString("s")
-                    val x = json.optDouble("x", 0.0).toFloat().coerceIn(-1f, 1f)
-                    val y = json.optDouble("y", 0.0).toFloat().coerceIn(-1f, 1f)
-                    main.post { sink?.onMotion(info.player, src, x, y) }
-                }
-                "menu" -> {
-                    val info = clients[conn] ?: return
-                    main.post { sink?.onMenu(info.player) }
-                }
-                "text" -> {
-                    if (clients[conn] == null) return
-                    val text = json.optString("v").take(100)
-                    main.post { sink?.onText(text) }
-                }
-                "ping" -> runCatching { conn.send("{\"t\":\"pong\"}") }
-            }
+            handleMessage(wsConns.getOrPut(conn) { WsConn(conn) }, message, conn.remoteSocketAddress.toString())
         }
 
         override fun onError(

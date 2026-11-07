@@ -568,6 +568,13 @@ private fun ControllersSection() {
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                 )
+                Text(
+                    "Kod do aplikacji na telefonie: ${PhonePadServer.token(context)}",
+                    color = K.text,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
                 Text(url, color = K.muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                 Text(
                     if (serverPort > 0) "Serwer działa (port $serverPort)" else "Serwer uruchamia się…",

@@ -58,8 +58,8 @@ data class PhoneInfo(val id: String, val name: String, val player: Int)
  * W danym momencie działa w jednym procesie: w głównym, gdy otwarte jest menu, albo w procesie gry.
  */
 object PhonePadServer {
-    const val HTTP_PORT = 8080
-    const val WS_PORT = 8081
+    const val HTTP_PORT = 47800
+    const val WS_PORT = 47801
     const val MAX_PHONES = 4
     private const val PREFS = "retrotv_pad"
 
@@ -92,7 +92,7 @@ object PhonePadServer {
     ): String = "http://$ip:${httpPort(context)}/?k=${token(context)}"
 
     /** Porty do wyboru – część telewizorów (np. TCL) zajmuje 8080 własną usługą. */
-    private val candidatePorts = listOf(8080, 18080, 28080, 38080, 48080)
+    private val candidatePorts = listOf(HTTP_PORT, 52800, 38800, 18800, 58800)
     private val portFlow = MutableStateFlow(0)
 
     /** Port strony pada (0 = serwer nie działa). WebSocket działa na porcie o jeden wyższym. */
@@ -106,7 +106,8 @@ object PhonePadServer {
 
     private fun portFile() = java.io.File(appContext.filesDir, "retrotv_pad_port")
 
-    private fun rememberedPort(): Int = runCatching { portFile().readText().trim().toInt() }.getOrDefault(candidatePorts.first())
+    private fun rememberedPort(): Int =
+        runCatching { portFile().readText().trim().toInt() }.getOrNull()?.takeIf { it in candidatePorts } ?: candidatePorts.first()
 
     /** Port do adresów w kodach QR: bieżący albo ostatnio użyty. */
     fun httpPort(context: Context): Int {

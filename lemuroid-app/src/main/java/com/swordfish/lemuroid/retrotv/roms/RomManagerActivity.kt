@@ -341,6 +341,12 @@ private fun PhoneSection(activity: RomManagerActivity) {
                 Text("1. Zeskanuj kod aparatem telefonu.", color = K.text, fontSize = 15.sp)
                 Text("2. Stuknij „Wybierz pliki z telefonu” i zaznacz gry.", color = K.text, fontSize = 15.sp)
                 Text("3. Po wysłaniu gry pojawią się w bibliotece.", color = K.text, fontSize = 15.sp)
+                if (ip != null) {
+                    val livePort by com.swordfish.lemuroid.retrotv.pad.PhonePadServer.port.collectAsState()
+                    val shownPort = if (livePort > 0) livePort else com.swordfish.lemuroid.retrotv.pad.PhonePadServer.httpPort(activity)
+                    Text("Albo wpisz w przeglądarce telefonu: $ip:$shownPort/upload?k=${com.swordfish.lemuroid.retrotv.pad.PhonePadServer.token(activity)}", color = K.muted, fontSize = 14.sp)
+                    if (livePort == 0) Text("Serwer jeszcze się uruchamia…", color = K.coral, fontSize = 14.sp)
+                }
                 net.ssid?.let { Text("Telefon musi być w sieci: $it", color = K.muted, fontSize = 14.sp) }
                 if (ip == null) Text("Telewizor nie jest połączony z siecią lokalną.", color = K.coral, fontSize = 14.sp)
                 Text("Z telefonu podłączonego jako pad: przycisk „Wyślij gry”.", color = K.muted, fontSize = 14.sp)

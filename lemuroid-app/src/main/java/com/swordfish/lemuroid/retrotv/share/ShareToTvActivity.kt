@@ -174,7 +174,7 @@ class ShareToTvActivity : ComponentActivity() {
         val ip = manualIp.trim()
         if (ip.isEmpty()) return null
         val host = ip.substringBefore(':')
-        val port = ip.substringAfter(':', "8080").toIntOrNull() ?: 8080
+        val port = ip.substringAfter(':', "${com.swordfish.lemuroid.retrotv.pad.PhonePadServer.HTTP_PORT}").toIntOrNull() ?: com.swordfish.lemuroid.retrotv.pad.PhonePadServer.HTTP_PORT
         return host to port
     }
 

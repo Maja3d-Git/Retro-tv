@@ -116,7 +116,7 @@ class NetplayHostService : Service() {
             return START_NOT_STICKY
         }
         code = Netplay.newCode()
-        goForeground(intent.getStringExtra(EXTRA_TITLE) ?: "Retro TV")
+        goForeground(intent?.getStringExtra(EXTRA_TITLE) ?: "Retro TV")
         try {
             startCapture(projection)
         } catch (e: Exception) {

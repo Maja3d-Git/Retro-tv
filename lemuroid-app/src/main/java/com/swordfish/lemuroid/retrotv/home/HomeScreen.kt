@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
@@ -148,7 +149,7 @@ fun HomeScreen(
             Rail(state, screen, actions, onOpen = { open(it) })
             Box(Modifier.weight(1f).fillMaxHeight().tvPane()) {
                 when (val s = screen) {
-                    Screen.Start -> StartContent(state, topGames, actions, showDetails, onOpenSystem = { open(Screen.Library(it)) })
+                    Screen.Start -> StartContent(state, topGames, actions, showDetails, onOpenSystem = { open(Screen.Library(it)) }, onSearch = { open(Screen.Search) })
                     Screen.Search -> SearchContent(viewModel, state, actions, showDetails)
                     is Screen.Library -> LibraryContent(s.meta, state, libraryGames, actions, showDetails)
                     is Screen.Details -> {
@@ -174,6 +175,7 @@ fun HomeScreen(
 // ---------- menu boczne ----------
 
 @Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun Rail(
     state: HomeViewModel.HomeState,
     screen: Screen,
@@ -181,29 +183,26 @@ private fun Rail(
     onOpen: (Screen) -> Unit,
 ) {
     val context = LocalContext.current
+    val startFocus = remember { FocusRequester() }
     Column(
         Modifier
             .width(220.dp)
             .fillMaxHeight()
             .background(K.nav)
+            // Strzałka w lewo z treści zawsze trafia na „Start” (bieżącą sekcję), a nie na najbliższy element.
+            .focusProperties { enter = { startFocus } }
             .tvPane()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         com.swordfish.lemuroid.retrotv.ui.RailHeader(null)
-        // Konsole są na ekranie Start – lista gier konsoli podświetla „Start”.
-        RailItem("Start", screen == Screen.Start || screen is Screen.Library) { onOpen(Screen.Start) }
-        RailItem("Szukaj", screen == Screen.Search) { onOpen(Screen.Search) }
+        // Konsole, wyszukiwanie i szczegóły gier należą do ekranu Start.
+        RailItem("Start", true, modifier = Modifier.focusRequester(startFocus)) { onOpen(Screen.Start) }
         RailItem("Dołącz do gry", false, onClick = actions::joinOnline)
 
         RailLabel("BIBLIOTEKA")
         RailItem("Gry i ROM-y", false, onClick = actions::openRomManager)
-        if (state.scanning) {
-            RailItem("Zatrzymaj skanowanie", false, onClick = actions::stopScan)
-        } else {
-            RailItem("Skanuj ponownie", false, enabled = !state.indexing, onClick = actions::rescan)
-        }
 
         RailLabel("USTAWIENIA")
         RailItem("Kontrolery", false, onClick = actions::openControllers)
@@ -230,12 +229,13 @@ private fun RailItem(
     selected: Boolean,
     count: Int? = null,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .height(42.dp)
             .clip(RoundedCornerShape(10.dp))
@@ -291,6 +291,7 @@ private fun TopBar(
     title: String,
     subtitle: String?,
     state: HomeViewModel.HomeState,
+    onSearch: (() -> Unit)? = null,
 ) {
     var now by remember { mutableStateOf(Date()) }
     var pads by remember { mutableStateOf(countPads()) }
@@ -305,6 +306,10 @@ private fun TopBar(
         Column(Modifier.weight(1f)) {
             Text(title, color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
             if (subtitle != null) Text(subtitle, color = K.muted, fontSize = 14.sp)
+        }
+        if (onSearch != null) {
+            TvButton("Szukaj gry", onClick = onSearch)
+            Spacer(Modifier.width(8.dp))
         }
         if (state.indexing) Chip("Skanowanie biblioteki…", K.accent)
         Spacer(Modifier.width(8.dp))
@@ -351,6 +356,7 @@ private fun StartContent(
     actions: HomeActions,
     onDetails: (Game) -> Unit,
     onOpenSystem: (MetaSystemID) -> Unit,
+    onSearch: () -> Unit,
 ) {
     val firstFocus = remember { FocusRequester() }
     val continueGame = state.continueGame
@@ -368,7 +374,7 @@ private fun StartContent(
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         val totalMs = PlayStats.totalMs(LocalContext.current)
-        TopBar("Start", if (totalMs > 60_000) "Łączny czas gry: ${PlayStats.format(totalMs)}" else null, state)
+        TopBar("Start", if (totalMs > 60_000) "Łączny czas gry: ${PlayStats.format(totalMs)}" else null, state, onSearch = onSearch)
 
         if (empty) {
             EmptyLibrary(state, actions, firstFocus)

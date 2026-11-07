@@ -342,6 +342,10 @@ private fun PhoneSection(activity: RomManagerActivity) {
                 net.ssid?.let { Text("Telefon musi być w sieci: $it", color = K.muted, fontSize = 14.sp) }
                 if (ip == null) Text("Telewizor nie jest połączony z siecią lokalną.", color = K.coral, fontSize = 14.sp)
                 Text("Z telefonu podłączonego jako pad: przycisk „Wyślij gry”.", color = K.muted, fontSize = 14.sp)
+                Spacer(Modifier.height(6.dp))
+                Text("Retro TV na telefonie z Androidem: Udostępnij → Retro TV", color = K.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Kod do wpisania w telefonie: ${com.swordfish.lemuroid.retrotv.pad.PhonePadServer.token(activity)}", color = K.text, fontSize = 15.sp)
+                Text("ZIP z kilkoma grami zostanie rozpakowany automatycznie.", color = K.muted, fontSize = 14.sp)
             }
         }
     }

@@ -178,6 +178,23 @@
             android:theme="@style/LemuroidMaterialTheme" />
 
         <activity
+            android:name="com.swordfish.lemuroid.retrotv.share.ShareToTvActivity"
+            android:exported="true"
+            android:label="Retro TV"
+            android:theme="@style/LemuroidMaterialTheme">
+            <intent-filter android:label="Wyślij do Retro TV">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter android:label="Wyślij do Retro TV">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name="com.swordfish.lemuroid.retrotv.onboarding.OnboardingActivity"
             android:theme="@style/LemuroidMaterialTheme" />
 

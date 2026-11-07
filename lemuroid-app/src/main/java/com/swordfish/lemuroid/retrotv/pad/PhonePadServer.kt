@@ -109,6 +109,7 @@ object PhonePadServer {
 
     @Synchronized
     fun stop() {
+        unregisterNsd()
         runCatching { httpSocket?.close() }
         httpSocket = null
         val ws = wsServer
@@ -142,6 +143,51 @@ object PhonePadServer {
         }
     }
 
+    const val NSD_TYPE = "_retrotv._tcp."
+    private var nsdListener: android.net.nsd.NsdManager.RegistrationListener? = null
+
+    /** Ogłasza telewizor w sieci domowej, żeby aplikacja na telefonie mogła go znaleźć. */
+    private fun registerNsd() {
+        if (nsdListener != null) return
+        val nsd = appContext.getSystemService(Context.NSD_SERVICE) as? android.net.nsd.NsdManager ?: return
+        val info =
+            android.net.nsd.NsdServiceInfo().apply {
+                serviceName = "Retro TV (${android.os.Build.MODEL})"
+                serviceType = NSD_TYPE
+                port = HTTP_PORT
+            }
+        val listener =
+            object : android.net.nsd.NsdManager.RegistrationListener {
+                override fun onServiceRegistered(info: android.net.nsd.NsdServiceInfo) {
+                    Timber.i("Retro TV ogłoszone w sieci jako %s", info.serviceName)
+                }
+
+                override fun onRegistrationFailed(
+                    info: android.net.nsd.NsdServiceInfo,
+                    errorCode: Int,
+                ) {
+                    Timber.w("Nie udało się ogłosić w sieci (kod %d)", errorCode)
+                }
+
+                override fun onServiceUnregistered(info: android.net.nsd.NsdServiceInfo) {}
+
+                override fun onUnregistrationFailed(
+                    info: android.net.nsd.NsdServiceInfo,
+                    errorCode: Int,
+                ) {}
+            }
+        nsdListener = listener
+        runCatching { nsd.registerService(info, android.net.nsd.NsdManager.PROTOCOL_DNS_SD, listener) }
+            .onFailure { nsdListener = null }
+    }
+
+    private fun unregisterNsd() {
+        val listener = nsdListener ?: return
+        nsdListener = null
+        val nsd = appContext.getSystemService(Context.NSD_SERVICE) as? android.net.nsd.NsdManager ?: return
+        runCatching { nsd.unregisterService(listener) }
+    }
+
     private fun startHttp(attempt: Int = 0) {
         val server =
             try {
@@ -159,6 +205,7 @@ object PhonePadServer {
                 return
             }
         httpSocket = server
+        registerNsd()
         val page =
             runCatching { appContext.assets.open("retrotv_pad/index.html").readBytes() }
                 .getOrElse { "Brak strony pada".toByteArray() }
@@ -282,10 +329,11 @@ object PhonePadServer {
         val target = java.io.File(dir, safe)
         target.delete()
         part.renameTo(target)
+        val unpacked = com.swordfish.lemuroid.retrotv.roms.RomFiles.expandZipIfNeeded(target)
         Timber.i("Odebrano z telefonu: %s (%d B)", safe, length)
         main.removeCallbacks(rescanRunnable)
         main.postDelayed(rescanRunnable, 1500)
-        return Triple("200 OK", "text/plain; charset=utf-8", "OK".toByteArray())
+        return Triple("200 OK", "text/plain; charset=utf-8", (if (unpacked > 0) "OK: $unpacked gier" else "OK").toByteArray())
     }
 
     private val rescanRunnable =

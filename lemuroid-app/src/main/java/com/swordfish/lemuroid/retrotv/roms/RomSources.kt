@@ -138,8 +138,37 @@ object RomFiles {
             target.delete()
             if (!part.renameTo(target)) throw IOException("Nie udało się zapisać $safeName")
             Timber.i("Zaimportowano %s (%d B) do %s", safeName, target.length(), subfolder)
+            expandZipIfNeeded(target)
             target
         }
+
+    /**
+     * ZIP z kilkoma grami rozpakowujemy na osobne pliki (biblioteka rozpoznaje grę w ZIP-ie
+     * tylko wtedy, gdy jest w nim jedna gra). ZIP z jedną grą zostaje bez zmian.
+     */
+    fun expandZipIfNeeded(file: File): Int {
+        if (!file.name.lowercase(Locale.US).endsWith(".zip")) return 0
+        val entries =
+            runCatching {
+                java.util.zip.ZipFile(file).use { zip ->
+                    zip.entries().toList().filter { !it.isDirectory && isRom(it.name) && !it.name.lowercase(Locale.US).endsWith(".zip") }.map { it.name }
+                }
+            }.getOrElse { return 0 }
+        if (entries.size <= 1) return 0
+        val dir = File(file.parentFile, file.nameWithoutExtension.replace(Regex("""[\\/:*?"<>|]"""), "_")).apply { mkdirs() }
+        var count = 0
+        java.util.zip.ZipFile(file).use { zip ->
+            entries.forEach { name ->
+                val entry = zip.getEntry(name) ?: return@forEach
+                val out = File(dir, name.substringAfterLast('/').replace(Regex("""[\\/:*?"<>|]"""), "_"))
+                zip.getInputStream(entry).use { input -> out.outputStream().use { input.copyTo(it) } }
+                count++
+            }
+        }
+        file.delete()
+        Timber.i("Rozpakowano %d gier z %s", count, file.name)
+        return count
+    }
 }
 
 /** Dostęp do udziałów sieciowych (NAS, komputer z Windows) przez SMB. */

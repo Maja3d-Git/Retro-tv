@@ -324,8 +324,7 @@ object LinkDownload {
 }
 
 /**
- * Wyszukiwanie gier w archive.org – tylko wśród pozycji oznaczonych przez autorów
- * jako domena publiczna albo Creative Commons (homebrew, darmowe gry).
+ * Wyszukiwanie gier w archive.org (wszystkie pozycje typu software).
  */
 object ArchiveSearch {
     data class Item(val id: String, val title: String, val license: String, val description: String)
@@ -356,9 +355,7 @@ object ArchiveSearch {
     suspend fun search(query: String): List<Item> =
         withContext(Dispatchers.IO) {
             val words = query.trim().replace(Regex("""[^\p{L}\p{N}\s]"""), " ").trim()
-            val q =
-                "(${words.ifBlank { "homebrew" }}) AND mediatype:software AND " +
-                    "(licenseurl:*creativecommons* OR licenseurl:*publicdomain*)"
+            val q = "(${words.ifBlank { "homebrew" }}) AND mediatype:software"
             val url =
                 "https://archive.org/advancedsearch.php?q=" + java.net.URLEncoder.encode(q, "UTF-8") +
                     "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=licenseurl&fl%5B%5D=description" +

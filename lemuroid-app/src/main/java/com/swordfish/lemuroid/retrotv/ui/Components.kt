@@ -53,7 +53,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.focusGroup
 import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.launch
@@ -229,3 +231,23 @@ fun RailHeader(subtitle: String?) {
         Text(subtitle, color = K.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 50.dp, bottom = 18.dp))
     }
 }
+
+/**
+ * Obszar ekranu (menu boczne albo treść), z którego pilot nie wychodzi strzałkami góra/dół.
+ * Dzięki temu „w dół” na końcu listy nie przeskakuje do innej zakładki menu.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+fun Modifier.tvPane(): Modifier =
+    this
+        .focusProperties {
+            exit = { direction ->
+                if (direction == androidx.compose.ui.focus.FocusDirection.Up ||
+                    direction == androidx.compose.ui.focus.FocusDirection.Down
+                ) {
+                    androidx.compose.ui.focus.FocusRequester.Cancel
+                } else {
+                    androidx.compose.ui.focus.FocusRequester.Default
+                }
+            }
+        }
+        .focusGroup()

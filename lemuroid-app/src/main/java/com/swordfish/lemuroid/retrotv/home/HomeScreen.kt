@@ -69,6 +69,7 @@ import com.swordfish.lemuroid.lib.library.db.entity.Game
 import com.swordfish.lemuroid.retrotv.pad.PadDetector
 import com.swordfish.lemuroid.retrotv.pad.PhonePadServer
 import com.swordfish.lemuroid.retrotv.ui.K
+import com.swordfish.lemuroid.retrotv.ui.tvPane
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
 import com.swordfish.lemuroid.retrotv.ui.TvButton
 import kotlinx.coroutines.delay
@@ -140,7 +141,7 @@ fun HomeScreen(
     Box(Modifier.fillMaxSize().background(K.bg)) {
         Row(Modifier.fillMaxSize()) {
             Rail(state, screen, actions, onOpen = { open(it) })
-            Box(Modifier.weight(1f).fillMaxHeight()) {
+            Box(Modifier.weight(1f).fillMaxHeight().tvPane()) {
                 when (val s = screen) {
                     Screen.Start -> StartContent(state, topGames, actions, showDetails, onOpenSystem = { open(Screen.Library(it)) })
                     Screen.Search -> SearchContent(viewModel, state, actions, showDetails)
@@ -180,6 +181,7 @@ private fun Rail(
             .width(220.dp)
             .fillMaxHeight()
             .background(K.nav)
+            .tvPane()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),

@@ -53,6 +53,8 @@ import com.swordfish.lemuroid.lib.storage.local.RetroTvFolders
 import com.swordfish.lemuroid.retrotv.ui.K
 import com.swordfish.lemuroid.retrotv.ui.Panel
 import com.swordfish.lemuroid.retrotv.ui.RailHeader
+import com.swordfish.lemuroid.retrotv.ui.tvPane
+import androidx.compose.ui.focus.focusProperties
 import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
 import com.swordfish.lemuroid.retrotv.ui.SectionTitle
@@ -109,26 +111,29 @@ class RomManagerActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun RomManagerScreen(activity: RomManagerActivity) {
     var section by remember { mutableStateOf(RomSection.FOLDERS) }
     var job by remember { mutableStateOf<Job?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    val firstTab = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstTab.requestFocus() } }
+    val tabs = remember { RomSection.values().associateWith { FocusRequester() } }
+    LaunchedEffect(Unit) { runCatching { tabs.getValue(RomSection.FOLDERS).requestFocus() } }
 
     Box(Modifier.fillMaxSize().background(K.bg)) {
         Row(Modifier.fillMaxSize()) {
             Column(
-                Modifier.width(220.dp).fillMaxHeight().background(K.nav).padding(horizontal = 12.dp, vertical = 24.dp),
+                Modifier.width(220.dp).fillMaxHeight().background(K.nav)
+                    .focusProperties { enter = { tabs.getValue(section) } }
+                    .tvPane().padding(horizontal = 12.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 RailHeader("Gry i ROM-y")
                 RomSection.values().forEachIndexed { i, s ->
-                    TabItem(s.title, s == section, if (i == 0) Modifier.focusRequester(firstTab) else Modifier) { section = s }
+                    TabItem(s.title, s == section, Modifier.focusRequester(tabs.getValue(s))) { section = s }
                 }
             }
-            Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 32.dp, vertical = 28.dp)) {
+            Box(Modifier.weight(1f).fillMaxHeight().tvPane().padding(horizontal = 32.dp, vertical = 28.dp)) {
                 when (section) {
                     RomSection.FOLDERS -> FoldersSection(activity) { message = it }
                     RomSection.USB -> UsbSection(activity, { job = it }) { message = it }

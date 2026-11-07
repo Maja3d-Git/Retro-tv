@@ -69,6 +69,8 @@ import java.io.File
 
 import com.swordfish.lemuroid.retrotv.ui.InfoRow
 import com.swordfish.lemuroid.retrotv.ui.RailHeader
+import com.swordfish.lemuroid.retrotv.ui.tvPane
+import androidx.compose.ui.focus.focusProperties
 import com.swordfish.lemuroid.retrotv.ui.K
 import com.swordfish.lemuroid.retrotv.ui.Panel
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
@@ -119,6 +121,7 @@ class TVSystemActivity : ComponentActivity() {
 
 // ---------- ekran ----------
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun SystemScreen(
     activity: ComponentActivity,
@@ -126,8 +129,8 @@ private fun SystemScreen(
     initial: Section,
 ) {
     var section by remember { mutableStateOf(initial) }
-    val firstTab = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstTab.requestFocus() } }
+    val tabs = remember { Section.values().associateWith { FocusRequester() } }
+    LaunchedEffect(Unit) { runCatching { tabs.getValue(initial).requestFocus() } }
 
     Row(Modifier.fillMaxSize().background(K.bg)) {
         Column(
@@ -135,6 +138,9 @@ private fun SystemScreen(
                 .width(220.dp)
                 .fillMaxHeight()
                 .background(K.nav)
+                // Wejście do menu (strzałka w lewo) zawsze na bieżącą zakładkę.
+                .focusProperties { enter = { tabs.getValue(section) } }
+                .tvPane()
                 .padding(horizontal = 12.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -147,7 +153,7 @@ private fun SystemScreen(
                     Modifier
                         .fillMaxWidth()
                         .height(42.dp)
-                        .then(if (s == initial) Modifier.focusRequester(firstTab) else Modifier)
+                        .focusRequester(tabs.getValue(s))
                         .onFocusChanged { if (it.isFocused) section = s }
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (selected) K.p.activeBg else Color.Transparent)
@@ -173,7 +179,7 @@ private fun SystemScreen(
             )
         }
 
-        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 32.dp, vertical = 28.dp)) {
+        Box(Modifier.weight(1f).fillMaxHeight().tvPane().padding(horizontal = 32.dp, vertical = 28.dp)) {
             when (section) {
                 Section.UPDATES -> UpdatesSection(activity, startUpdate)
                 Section.APPEARANCE -> AppearanceSection(activity)

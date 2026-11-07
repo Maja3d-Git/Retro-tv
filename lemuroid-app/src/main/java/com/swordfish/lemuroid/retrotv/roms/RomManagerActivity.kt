@@ -65,6 +65,7 @@ import java.io.File
 
 private enum class RomSection(val title: String) {
     FOLDERS("Foldery z grami"),
+    PHONE("Z telefonu"),
     USB("Import z pendrive’a"),
     NAS("Dysk sieciowy"),
     HOMEBREW("Darmowe gry"),
@@ -136,6 +137,7 @@ private fun RomManagerScreen(activity: RomManagerActivity) {
             Box(Modifier.weight(1f).fillMaxHeight().tvPane().padding(horizontal = 32.dp, vertical = 28.dp)) {
                 when (section) {
                     RomSection.FOLDERS -> FoldersSection(activity) { message = it }
+                    RomSection.PHONE -> PhoneSection(activity)
                     RomSection.USB -> UsbSection(activity, { job = it }) { message = it }
                     RomSection.NAS -> NasSection(activity, { job = it }) { message = it }
                     RomSection.HOMEBREW -> HomebrewSection(activity, { job = it }) { message = it }
@@ -281,6 +283,35 @@ private fun FoldersSection(
             fontSize = 14.sp,
             lineHeight = 20.sp,
         )
+    }
+}
+
+// ---------- Z telefonu ----------
+
+@Composable
+private fun PhoneSection(activity: RomManagerActivity) {
+    val net = remember { com.swordfish.lemuroid.retrotv.system.SystemStatus.network(activity) }
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        SectionTitle("Z telefonu", "Wyślij pliki gier z telefonu prosto do pamięci telewizora")
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            val ip = net.ipAddress
+            if (ip != null) {
+                Box(Modifier.clip(RoundedCornerShape(16.dp)).background(K.card).padding(16.dp)) {
+                    com.swordfish.lemuroid.retrotv.system.QrImage(
+                        com.swordfish.lemuroid.retrotv.pad.PhonePadServer.uploadUrl(activity, ip),
+                        Modifier.width(200.dp).height(200.dp),
+                    )
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("1. Zeskanuj kod aparatem telefonu.", color = K.text, fontSize = 15.sp)
+                Text("2. Stuknij „Wybierz pliki z telefonu” i zaznacz gry.", color = K.text, fontSize = 15.sp)
+                Text("3. Po wysłaniu gry pojawią się w bibliotece.", color = K.text, fontSize = 15.sp)
+                net.ssid?.let { Text("Telefon musi być w sieci: $it", color = K.muted, fontSize = 14.sp) }
+                if (ip == null) Text("Telewizor nie jest połączony z siecią lokalną.", color = K.coral, fontSize = 14.sp)
+                Text("Z telefonu podłączonego jako pad: przycisk „Wyślij gry”.", color = K.muted, fontSize = 14.sp)
+            }
+        }
     }
 }
 

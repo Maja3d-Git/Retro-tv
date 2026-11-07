@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1C1C21">
+<title>Retro TV – wyślij gry</title>
+<style>
+:root{--bg:#1C1C21;--card:#2F2F36;--btn:#3A3A42;--line:#4A4A55;--text:#ECEAE5;--muted:#A8A5B2;--accent:#8E80F0;--coral:#FF7A70;--ok:#6BD39A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(20px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
+h1{margin:0 0 6px;font-size:24px}
+p{margin:0 0 18px;color:var(--muted);line-height:1.45;max-width:60ch}
+.pick{display:flex;align-items:center;justify-content:center;gap:10px;min-height:120px;border:2px dashed var(--line);border-radius:16px;background:var(--card);font-size:17px;font-weight:600;cursor:pointer;text-align:center;padding:16px}
+input[type=file]{display:none}
+ul{list-style:none;margin:18px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+li{background:var(--card);border-radius:12px;padding:12px 14px}
+.row{display:flex;justify-content:space-between;gap:10px;font-size:15px}
+.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st{color:var(--muted);flex-shrink:0}
+.st.ok{color:var(--ok)}.st.err{color:var(--coral)}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent)}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<h1>Wyślij gry na telewizor</h1>
+<p>Wybierz pliki gier z telefonu (np. .nes, .sfc, .gba, .md, .zip). Trafią do pamięci Retro TV i pojawią się w bibliotece po chwili.</p>
+<label class="pick" for="f">📁 Wybierz pliki z telefonu</label>
+<input id="f" type="file" multiple>
+<ul id="list"></ul>
+<p style="margin-top:22px"><a id="pad" href="#">← Wróć do pada</a></p>
+<script>
+(function(){
+const key=new URLSearchParams(location.search).get("k")||"";
+document.getElementById("pad").href="/?k="+encodeURIComponent(key);
+const list=document.getElementById("list");
+let queue=[],busy=false;
+function fmt(n){return n>1048576?(n/1048576).toFixed(1)+" MB":Math.ceil(n/1024)+" KB"}
+function add(file){
+  const li=document.createElement("li");
+  li.innerHTML='<div class="row"><span class="name"></span><span class="st">w kolejce</span></div><div class="bar"><i></i></div>';
+  li.querySelector(".name").textContent=file.name+" · "+fmt(file.size);
+  list.appendChild(li);queue.push({file,li});next();
+}
+function next(){
+  if(busy||!queue.length)return;busy=true;
+  const {file,li}=queue.shift();const st=li.querySelector(".st"),bar=li.querySelector(".bar i");
+  const xhr=new XMLHttpRequest();
+  xhr.open("PUT","/upload?k="+encodeURIComponent(key)+"&name="+encodeURIComponent(file.name));
+  xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded/e.total*100);bar.style.width=p+"%";st.textContent=p+"%"}};
+  xhr.onload=()=>{if(xhr.status===200){st.textContent="wysłano ✓";st.className="st ok";bar.style.width="100%"}else{st.textContent=xhr.responseText||("błąd "+xhr.status);st.className="st err"}busy=false;next()};
+  xhr.onerror=()=>{st.textContent="brak połączenia z telewizorem";st.className="st err";busy=false;next()};
+  st.textContent="0%";xhr.send(file);
+}
+document.getElementById("f").addEventListener("change",e=>{[...e.target.files].forEach(add);e.target.value=""});
+})();
+</script>
+</body>
+</html>

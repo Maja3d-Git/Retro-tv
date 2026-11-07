@@ -53,6 +53,7 @@ main{flex:1;display:flex;align-items:center;justify-content:space-between;gap:16
     <span class="dot" id="dot"></span>
     <span id="status">Łączenie…</span>
     <span id="title"></span>
+    <button class="small" id="upBtn" hidden>Wyślij gry</button>
     <button class="small" id="kbBtn" hidden>Klawiatura</button>
     <button class="small" id="menuBtn" hidden>Menu gry</button>
   </header>
@@ -91,7 +92,7 @@ function connect(){
     if(m.t==="welcome"){connected=true;player=m.player;mode=m.mode;layout=m.mode==="menu"?"menu":(m.layout||"two");
       $("#overlay").hidden=true;$("#dot").classList.add("on");
       $("#status").textContent="Gracz "+player;$("#title").textContent=m.mode==="menu"?"· sterowanie menu":"· "+(m.title||"");
-      $("#menuBtn").hidden=m.mode!=="game";$("#kbBtn").hidden=m.mode!=="menu";build();}};
+      $("#menuBtn").hidden=m.mode!=="game";$("#kbBtn").hidden=m.mode!=="menu";$("#upBtn").hidden=m.mode!=="menu";build();}};
   ws.onclose=e=>{connected=false;$("#dot").classList.remove("on");
     if(e.code===4001||e.code===4002){$("#overlay").hidden=false;$("#overlay h1").textContent=e.reason||"Odrzucono połączenie";return;}
     $("#status").textContent="Łączenie…";setTimeout(()=>{if(!connected)$("#overlay").hidden=false},2500);setTimeout(connect,1000);};
@@ -151,6 +152,7 @@ function build(){
   (L.shr||[]).forEach(([t,c])=>{const b=document.createElement("button");b.className="sh";b.style.borderRadius="10px 22px 10px 10px";b.textContent=t;bindButton(b,c);sr.appendChild(b)});
   sh.append(sl,sr);sh.style.visibility=(L.sh&&L.sh.length)||(L.shr&&L.shr.length)?"visible":"hidden";
 }
+$("#upBtn").addEventListener("click",()=>{location.href="/upload?k="+encodeURIComponent(key)});
 $("#menuBtn").addEventListener("click",()=>{buzz();send({t:"menu"})});
 $("#kbBtn").addEventListener("click",()=>{const k=$("#kbd");k.hidden=!k.hidden;if(!k.hidden)$("#kbIn").focus()});
 $("#kbSend").addEventListener("click",()=>{send({t:"text",v:$("#kbIn").value});$("#kbd").hidden=true;$("#kbIn").blur()});

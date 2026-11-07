@@ -178,26 +178,50 @@ object PhonePadServer {
         }
     }
 
+    /** Czyta jedną linię nagłówka bez buforowania (treść zapytania zostaje w strumieniu). */
+    private fun readHeaderLine(input: java.io.InputStream): String? {
+        val sb = StringBuilder()
+        while (true) {
+            val b = input.read()
+            if (b < 0) return if (sb.isEmpty()) null else sb.toString()
+            if (b == '\n'.code) return sb.toString().trimEnd('\r')
+            sb.append(b.toChar())
+            if (sb.length > 8192) return sb.toString()
+        }
+    }
+
     private fun serveHttp(
         client: java.net.Socket,
         page: ByteArray,
     ) {
         try {
             client.use { c ->
-                c.soTimeout = 10_000
-                val reader = BufferedReader(InputStreamReader(c.getInputStream()))
-                val request = reader.readLine() ?: return
+                c.soTimeout = 30_000
+                val input = c.getInputStream()
+                val request = readHeaderLine(input) ?: return
+                val headers = mutableMapOf<String, String>()
                 // Wczytujemy całe zapytanie – zamknięcie gniazda z nieprzeczytanymi danymi
                 // powoduje zerwanie połączenia (ERR_TOO_MANY_RETRIES w Chrome).
                 while (true) {
-                    val line = reader.readLine() ?: break
+                    val line = readHeaderLine(input) ?: break
                     if (line.isEmpty()) break
+                    val i = line.indexOf(':')
+                    if (i > 0) headers[line.substring(0, i).trim().lowercase()] = line.substring(i + 1).trim()
                 }
-                val notFound = request.contains("favicon")
-                val body = if (notFound) ByteArray(0) else page
+                val parts = request.split(" ")
+                val method = parts.getOrNull(0) ?: "GET"
+                val path = parts.getOrNull(1) ?: "/"
+
+                val (status, type, body) =
+                    when {
+                        path.contains("favicon") -> Triple("404 Not Found", "text/plain", ByteArray(0))
+                        method == "PUT" && path.startsWith("/upload") -> handleUpload(path, headers, input)
+                        path.startsWith("/upload") -> Triple("200 OK", "text/html; charset=utf-8", asset("retrotv_pad/upload.html"))
+                        else -> Triple("200 OK", "text/html; charset=utf-8", page)
+                    }
                 val header =
-                    (if (notFound) "HTTP/1.1 404 Not Found\r\n" else "HTTP/1.1 200 OK\r\n") +
-                        "Content-Type: text/html; charset=utf-8\r\n" +
+                    "HTTP/1.1 $status\r\n" +
+                        "Content-Type: $type\r\n" +
                         "Cache-Control: no-store\r\n" +
                         "Content-Length: ${body.size}\r\nConnection: close\r\n\r\n"
                 val out = c.getOutputStream()
@@ -206,12 +230,71 @@ object PhonePadServer {
                 out.flush()
                 c.shutdownOutput()
                 // Dajemy przeglądarce chwilę na odebranie danych przed zamknięciem.
-                runCatching { while (c.getInputStream().read() >= 0) { } }
+                runCatching { while (input.read() >= 0) { } }
             }
         } catch (e: Exception) {
             Timber.d(e, "Strona pada: połączenie przerwane")
         }
     }
+
+    private fun asset(name: String): ByteArray =
+        runCatching { appContext.assets.open(name).readBytes() }.getOrElse { "Brak strony".toByteArray() }
+
+    /** Odbiera plik gry wysłany z telefonu (PUT /upload?k=…&name=…, treść = zawartość pliku). */
+    private fun handleUpload(
+        path: String,
+        headers: Map<String, String>,
+        input: java.io.InputStream,
+    ): Triple<String, String, ByteArray> {
+        val query =
+            path.substringAfter('?', "").split('&').mapNotNull {
+                val kv = it.split('=', limit = 2)
+                if (kv.size == 2) kv[0] to java.net.URLDecoder.decode(kv[1], "UTF-8") else null
+            }.toMap()
+        fun fail(
+            code: String,
+            msg: String,
+        ) = Triple(code, "text/plain; charset=utf-8", msg.toByteArray())
+        if (query["k"] != token(appContext)) return fail("403 Forbidden", "Nieprawidłowy kod – zeskanuj QR ponownie")
+        val name = (query["name"] ?: "").substringAfterLast('/').substringAfterLast('\\')
+        if (!com.swordfish.lemuroid.retrotv.roms.RomFiles.isRom(name)) return fail("415 Unsupported Media Type", "To nie jest plik gry: $name")
+        val length = headers["content-length"]?.toLongOrNull() ?: return fail("411 Length Required", "Brak rozmiaru pliku")
+        if (length > com.swordfish.lemuroid.retrotv.roms.RomFiles.freeBytes(appContext) - 50L * 1024 * 1024) {
+            return fail("507 Insufficient Storage", "Za mało miejsca w telewizorze")
+        }
+        val dir = java.io.File(com.swordfish.lemuroid.retrotv.roms.RomFiles.internalDir(appContext), "telefon").apply { mkdirs() }
+        val safe = name.replace(Regex("""[\\/:*?"<>|]"""), "_")
+        val part = java.io.File(dir, "$safe.part")
+        part.outputStream().use { out ->
+            val buffer = ByteArray(128 * 1024)
+            var left = length
+            while (left > 0) {
+                val read = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
+                if (read < 0) break
+                out.write(buffer, 0, read)
+                left -= read
+            }
+            if (left > 0) {
+                part.delete()
+                return fail("400 Bad Request", "Przesyłanie przerwane")
+            }
+        }
+        val target = java.io.File(dir, safe)
+        target.delete()
+        part.renameTo(target)
+        Timber.i("Odebrano z telefonu: %s (%d B)", safe, length)
+        main.removeCallbacks(rescanRunnable)
+        main.postDelayed(rescanRunnable, 1500)
+        return Triple("200 OK", "text/plain; charset=utf-8", "OK".toByteArray())
+    }
+
+    private val rescanRunnable =
+        Runnable { com.swordfish.lemuroid.app.shared.library.LibraryIndexScheduler.scheduleLibrarySync(appContext) }
+
+    fun uploadUrl(
+        context: Context,
+        ip: String,
+    ): String = "http://$ip:$HTTP_PORT/upload?k=${token(context)}"
 
     private fun assignPlayer(id: String): Int {
         val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

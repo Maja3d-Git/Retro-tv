@@ -56,6 +56,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import com.swordfish.lemuroid.BuildConfig
 import com.swordfish.lemuroid.retrotv.RetroTvLog
+import com.swordfish.lemuroid.ext.feature.savesync.SaveSyncManagerImpl
+import com.swordfish.lemuroid.lib.storage.DirectoriesManager
+import com.swordfish.lemuroid.app.shared.savesync.SaveSyncWork
 import com.swordfish.lemuroid.retrotv.pad.PhonePadServer
 import androidx.compose.runtime.collectAsState
 import com.swordfish.lemuroid.retrotv.update.ReleaseInfo
@@ -78,6 +81,7 @@ import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 private enum class Section(val title: String) {
     UPDATES("Aktualizacje"),
     APPEARANCE("Wygląd"),
+    BACKUP("Kopie zapisów"),
     NETWORK("Połączenie"),
     CONTROLLERS("Kontrolery"),
     LOGS("Dziennik"),
@@ -180,6 +184,7 @@ private fun SystemScreen(
             when (section) {
                 Section.UPDATES -> UpdatesSection(activity, startUpdate)
                 Section.APPEARANCE -> AppearanceSection(activity)
+                Section.BACKUP -> BackupSection(activity)
                 Section.NETWORK -> NetworkSection()
                 Section.CONTROLLERS -> ControllersSection()
                 Section.LOGS -> LogsSection()
@@ -371,6 +376,50 @@ private fun AppearanceSection(activity: ComponentActivity) {
             "Tryb automatyczny włącza ciemny motyw między 19:00 a 7:00.",
             color = K.muted,
             fontSize = 14.sp,
+        )
+    }
+}
+
+// ---------- Kopie zapisów ----------
+
+@Composable
+private fun BackupSection(activity: ComponentActivity) {
+    val manager = remember { SaveSyncManagerImpl(activity.applicationContext, DirectoriesManager(activity.applicationContext)) }
+    var refresh by remember { mutableStateOf(0) }
+    val configured = remember(refresh) { manager.isConfigured() }
+    val config = remember(refresh) { runCatching { manager.getConfigInfo() }.getOrDefault("") }
+    val last = remember(refresh) { runCatching { manager.getLastSyncInfo() }.getOrDefault("") }
+    DisposableEffect(Unit) {
+        val observer =
+            androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) refresh++
+            }
+        activity.lifecycle.addObserver(observer)
+        onDispose { activity.lifecycle.removeObserver(observer) }
+    }
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SectionTitle("Kopie zapisów", "Zapisy gier w ukrytym folderze aplikacji na Twoim Dysku Google")
+        Panel {
+            InfoRow("Konto Google", if (configured) config.ifBlank { "połączone" } else "niepołączone", if (configured) K.ok else K.muted)
+            InfoRow("Ostatnia synchronizacja", last.ifBlank { "—" })
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            val settings = manager.getSettingsActivity()
+            TvButton(if (configured) "Zmień / odłącz konto" else "Połącz z Google", primary = !configured, onClick = {
+                if (settings != null) activity.startActivity(Intent(activity, settings))
+            })
+            if (configured) {
+                TvButton("Synchronizuj teraz", primary = true, onClick = {
+                    SaveSyncWork.enqueueManualWork(activity.applicationContext)
+                })
+            }
+        }
+        Text(
+            "Synchronizacja działa automatycznie po każdej grze. Logowanie Google wymaga jednorazowej konfiguracji " +
+                "projektu w Google Cloud dla tej aplikacji – jeśli logowanie się nie udaje, ta konfiguracja jeszcze nie została zrobiona.",
+            color = K.muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
         )
     }
 }

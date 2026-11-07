@@ -47,7 +47,51 @@ object Updater {
 
     private val latestUrl get() = "https://api.github.com/repos/${BuildConfig.RETROTV_REPO}/releases/latest"
 
+    /**
+     * Najpierw API GitHuba; gdy odmówi (np. 403 – limit zapytań dla wspólnego adresu IP u dostawcy
+     * internetu), korzysta ze zwykłych stron github.com, które tego limitu nie mają.
+     */
     suspend fun fetchLatest(): ReleaseInfo =
+        try {
+            fetchLatestApi()
+        } catch (e: Exception) {
+            Timber.w(e, "API GitHuba niedostępne, sprawdzam przez stronę wydań")
+            try {
+                fetchLatestWeb()
+            } catch (e2: Exception) {
+                Timber.e(e2, "Sprawdzanie przez stronę wydań nie powiodło się")
+                throw e
+            }
+        }
+
+    private val noRedirectClient by lazy { client.newBuilder().followRedirects(false).followSslRedirects(false).build() }
+
+    private suspend fun fetchLatestWeb(): ReleaseInfo =
+        withContext(Dispatchers.IO) {
+            val repo = BuildConfig.RETROTV_REPO
+            val request = Request.Builder().url("https://github.com/$repo/releases/latest").header("User-Agent", "RetroTV-Android").build()
+            val location =
+                noRedirectClient.newCall(request).execute().use { response ->
+                    response.header("Location") ?: throw IOException("Strona wydań odpowiedziała kodem ${response.code}")
+                }
+            val tag = location.substringAfterLast("/tag/", "").substringBefore('?')
+            val build = tag.removePrefix("build-").toIntOrNull() ?: throw IOException("Nieznany format wydania: $location")
+            val version =
+                runCatching {
+                    val v = Request.Builder().url("https://raw.githubusercontent.com/$repo/main/version.txt").header("User-Agent", "RetroTV-Android").build()
+                    client.newCall(v).execute().use { r -> if (r.isSuccessful) r.body?.string()?.trim() else null }
+                }.getOrNull()?.takeIf { it.isNotEmpty() && it.length < 12 }
+            ReleaseInfo(
+                build = build,
+                title = if (version != null) "Retro TV $version.$build" else "Retro TV (wydanie $build)",
+                notes = "Opis zmian: github.com/$repo/releases",
+                publishedAt = "",
+                apkUrl = "https://github.com/$repo/releases/download/$tag/$APK_NAME",
+                apkSize = 0L,
+            )
+        }
+
+    private suspend fun fetchLatestApi(): ReleaseInfo =
         withContext(Dispatchers.IO) {
             val request =
                 Request.Builder()

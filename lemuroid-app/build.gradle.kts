@@ -20,7 +20,7 @@ android {
         applicationId = "pl.maja3d.retrotv"
         buildConfigField("int", "RETROTV_BUILD", "$retrotvBuild")
         buildConfigField("String", "RETROTV_BUILD_TIME", "\"$retrotvBuildTime\"")
-        buildConfigField("String", "RETROTV_REPO", "\"Maja3d-Git/retro-tv\"")
+        buildConfigField("String", "RETROTV_REPO", "\"Maja3d-Git/Retro-tv\"")
     }
     flavorDimensions += listOf("opensource", "cores")
 

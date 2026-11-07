@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -329,8 +330,9 @@ private fun PhoneSection(activity: RomManagerActivity) {
             val ip = net.ipAddress
             if (ip != null) {
                 Box(Modifier.clip(RoundedCornerShape(16.dp)).background(K.card).padding(16.dp)) {
+                    val serverPort by com.swordfish.lemuroid.retrotv.pad.PhonePadServer.port.collectAsState()
                     com.swordfish.lemuroid.retrotv.system.QrImage(
-                        com.swordfish.lemuroid.retrotv.pad.PhonePadServer.uploadUrl(activity, ip),
+                        remember(serverPort) { com.swordfish.lemuroid.retrotv.pad.PhonePadServer.uploadUrl(activity, ip) },
                         Modifier.width(200.dp).height(200.dp),
                     )
                 }

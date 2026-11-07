@@ -176,7 +176,8 @@ class OnboardingActivity : ComponentActivity() {
         val ip = remember { SystemStatus.network(this).ipAddress }
         val phones by PhonePadServer.phones.collectAsState()
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (ip != null) QrImage(PhonePadServer.pairingUrl(this@OnboardingActivity, ip), Modifier.size(160.dp))
+            val serverPort by PhonePadServer.port.collectAsState()
+            if (ip != null) QrImage(remember(serverPort) { PhonePadServer.pairingUrl(this@OnboardingActivity, ip) }, Modifier.size(160.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     if (phones.isEmpty()) "Czekam na telefon…" else "Połączono: ${phones.joinToString { it.name }}",

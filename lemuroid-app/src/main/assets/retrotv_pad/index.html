@@ -86,7 +86,8 @@ const $=s=>document.querySelector(s);
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function buzz(){try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}}
 function connect(){
-  ws=new WebSocket("ws://"+location.hostname+":8081/pad?k="+encodeURIComponent(key));
+  const wsPort=(parseInt(location.port)||80)+1;
+  ws=new WebSocket("ws://"+location.hostname+":"+wsPort+"/pad?k="+encodeURIComponent(key));
   ws.onopen=()=>send({t:"hello",id:id,name:name});
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}
     if(m.t==="welcome"){connected=true;player=m.player;mode=m.mode;layout=m.mode==="menu"?"menu":(m.layout||"two");

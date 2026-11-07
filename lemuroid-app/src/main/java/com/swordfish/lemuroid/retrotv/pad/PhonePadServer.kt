@@ -89,7 +89,30 @@ object PhonePadServer {
     fun pairingUrl(
         context: Context,
         ip: String,
-    ): String = "http://$ip:$HTTP_PORT/?k=${token(context)}"
+    ): String = "http://$ip:${httpPort(context)}/?k=${token(context)}"
+
+    /** Porty do wyboru – część telewizorów (np. TCL) zajmuje 8080 własną usługą. */
+    private val candidatePorts = listOf(8080, 18080, 28080, 38080, 48080)
+    private val portFlow = MutableStateFlow(0)
+
+    /** Port strony pada (0 = serwer nie działa). WebSocket działa na porcie o jeden wyższym. */
+    val port: StateFlow<Int> = portFlow
+
+    @Volatile
+    private var starting = false
+
+    @Volatile
+    private var wsPort = 0
+
+    private fun portFile() = java.io.File(appContext.filesDir, "retrotv_pad_port")
+
+    private fun rememberedPort(): Int = runCatching { portFile().readText().trim().toInt() }.getOrDefault(candidatePorts.first())
+
+    /** Port do adresów w kodach QR: bieżący albo ostatnio użyty. */
+    fun httpPort(context: Context): Int {
+        if (!this::appContext.isInitialized) appContext = context.applicationContext
+        return portFlow.value.takeIf { it > 0 } ?: rememberedPort()
+    }
 
     /** Uruchamia serwer (albo tylko podmienia odbiorcę, jeśli już działa). */
     @Synchronized
@@ -99,12 +122,68 @@ object PhonePadServer {
     ) {
         appContext = context.applicationContext
         sink = newSink
-        if (httpSocket == null) startHttp()
-        if (wsServer != null) {
+        if (httpSocket != null) {
             broadcastWelcome()
             return
         }
-        startWebSocket(attempt = 0)
+        if (starting) return
+        starting = true
+        thread(name = "retrotv-pad-bind", isDaemon = true) { bindAndStart() }
+    }
+
+    private fun tryBind(p: Int): ServerSocket? =
+        try {
+            ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(p))
+            }
+        } catch (e: Exception) {
+            null
+        }
+
+    private fun isFree(p: Int): Boolean = tryBind(p)?.let { it.close(); true } ?: false
+
+    /** Szuka wolnego portu: najpierw ostatnio używany (drugi proces może go jeszcze zwalniać), potem kolejne. */
+    private fun bindAndStart() {
+        val remembered = rememberedPort()
+        val order = (listOf(remembered) + candidatePorts).distinct()
+        var bound: ServerSocket? = null
+        var chosen = 0
+        outer@ for (p in order) {
+            val tries = if (p == remembered) 8 else 1
+            for (attempt in 0 until tries) {
+                if (sink == null) break@outer
+                val http = tryBind(p)
+                if (http != null) {
+                    if (isFree(p + 1)) {
+                        bound = http
+                        chosen = p
+                        break@outer
+                    }
+                    runCatching { http.close() }
+                } else {
+                    Timber.d("Port %d zajęty (próba %d)", p, attempt + 1)
+                }
+                if (tries > 1) Thread.sleep(300)
+            }
+        }
+        main.post {
+            starting = false
+            val server = bound
+            if (server == null || sink == null) {
+                runCatching { server?.close() }
+                if (server == null) Timber.e("Pad w telefonie: brak wolnego portu (sprawdzone: %s)", order)
+                portFlow.value = 0
+                return@post
+            }
+            runCatching { portFile().writeText(chosen.toString()) }
+            httpSocket = server
+            portFlow.value = chosen
+            serveLoop(server)
+            registerNsd(chosen)
+            startWebSocket(chosen + 1, 0)
+            Timber.i("Pad w telefonie: strona na porcie %d (proces %s)", chosen, sink?.mode)
+        }
     }
 
     @Synchronized
@@ -112,6 +191,7 @@ object PhonePadServer {
         unregisterNsd()
         runCatching { httpSocket?.close() }
         httpSocket = null
+        portFlow.value = 0
         val ws = wsServer
         wsServer = null
         // Zamykanie połączeń może chwilę potrwać – nie blokujemy wątku interfejsu.
@@ -126,35 +206,38 @@ object PhonePadServer {
         clients.forEach { (conn, info) -> sendWelcome(conn, info) }
     }
 
-    private fun startWebSocket(attempt: Int) {
+    private fun startWebSocket(
+        port: Int,
+        attempt: Int,
+    ) {
+        wsPort = port
+        wsAttempt = attempt
         try {
-            val server = PadWebSocketServer(WS_PORT)
+            val server = PadWebSocketServer(port)
             server.isReuseAddr = true
             server.connectionLostTimeout = 10
             server.start()
             wsServer = server
-            Timber.i("Pad w telefonie: serwer uruchomiony (proces %s)", sink?.mode)
         } catch (e: Exception) {
-            if (attempt < 12) {
-                main.postDelayed({ startWebSocket(attempt + 1) }, 400)
-            } else {
-                Timber.e(e, "Nie udało się uruchomić serwera pada")
-            }
+            Timber.e(e, "Nie udało się uruchomić WebSocket na porcie %d", port)
         }
     }
+
+    @Volatile
+    private var wsAttempt = 0
 
     const val NSD_TYPE = "_retrotv._tcp."
     private var nsdListener: android.net.nsd.NsdManager.RegistrationListener? = null
 
     /** Ogłasza telewizor w sieci domowej, żeby aplikacja na telefonie mogła go znaleźć. */
-    private fun registerNsd() {
+    private fun registerNsd(httpPort: Int) {
         if (nsdListener != null) return
         val nsd = appContext.getSystemService(Context.NSD_SERVICE) as? android.net.nsd.NsdManager ?: return
         val info =
             android.net.nsd.NsdServiceInfo().apply {
                 serviceName = "Retro TV (${android.os.Build.MODEL})"
                 serviceType = NSD_TYPE
-                port = HTTP_PORT
+                port = httpPort
             }
         val listener =
             object : android.net.nsd.NsdManager.RegistrationListener {
@@ -188,24 +271,7 @@ object PhonePadServer {
         runCatching { nsd.unregisterService(listener) }
     }
 
-    private fun startHttp(attempt: Int = 0) {
-        val server =
-            try {
-                ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(HTTP_PORT))
-                }
-            } catch (e: Exception) {
-                // Port bywa jeszcze zajęty przez drugi proces (menu ↔ gra) – próbujemy ponownie.
-                if (attempt < 12) {
-                    main.postDelayed({ if (wsServer != null || sink != null) startHttp(attempt + 1) }, 400)
-                } else {
-                    Timber.w(e, "Port %d zajęty – strona pada niedostępna", HTTP_PORT)
-                }
-                return
-            }
-        httpSocket = server
-        registerNsd()
+    private fun serveLoop(server: ServerSocket) {
         val page =
             runCatching { appContext.assets.open("retrotv_pad/index.html").readBytes() }
                 .getOrElse { "Brak strony pada".toByteArray() }
@@ -342,7 +408,7 @@ object PhonePadServer {
     fun uploadUrl(
         context: Context,
         ip: String,
-    ): String = "http://$ip:$HTTP_PORT/upload?k=${token(context)}"
+    ): String = "http://$ip:${httpPort(context)}/upload?k=${token(context)}"
 
     private fun assignPlayer(id: String): Int {
         val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -452,7 +518,7 @@ object PhonePadServer {
             if (conn == null && wsServer === this) {
                 // Serwer nie wystartował (np. port zajęty przez drugi proces) – ponawiamy.
                 wsServer = null
-                main.postDelayed({ if (sink != null && wsServer == null) startWebSocket(1) }, 500)
+                if (wsAttempt < 10) main.postDelayed({ if (sink != null && wsServer == null) startWebSocket(wsPort, wsAttempt + 1) }, 400)
             }
         }
 

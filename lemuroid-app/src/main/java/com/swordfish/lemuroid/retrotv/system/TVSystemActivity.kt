@@ -547,7 +547,8 @@ private fun ControllersSection() {
         ) {
             Text("Telefon jako pad", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             if (ip != null) {
-                val url = PhonePadServer.pairingUrl(context, ip)
+                val serverPort by PhonePadServer.port.collectAsState()
+                val url = remember(serverPort) { PhonePadServer.pairingUrl(context, ip) }
                 QrImage(url, Modifier.size(180.dp))
                 val ssid = remember { SystemStatus.network(context).ssid }
                 if (ssid != null) Text("Sieć: $ssid", color = K.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -558,6 +559,11 @@ private fun ControllersSection() {
                     lineHeight = 20.sp,
                 )
                 Text(url, color = K.muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                Text(
+                    if (serverPort > 0) "Serwer działa (port $serverPort)" else "Serwer uruchamia się…",
+                    color = if (serverPort > 0) K.ok else K.muted,
+                    fontSize = 12.sp,
+                )
             } else {
                 Text("Brak połączenia z siecią lokalną.", color = K.coral, fontSize = 14.sp)
             }

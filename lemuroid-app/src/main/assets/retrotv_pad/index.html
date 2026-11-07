@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1C1C21">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Retro TV – pad</title>
+<style>
+:root{--bg:#1C1C21;--card:#2F2F36;--btn:#3A3A42;--line:#4A4A55;--text:#ECEAE5;--muted:#A8A5B2;--accent:#8E80F0;--coral:#FF7A70;--ok:#6BD39A}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;touch-action:none}
+#app{position:fixed;inset:0;padding:max(10px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;height:40px;flex-shrink:0}
+.dot{width:10px;height:10px;border-radius:5px;background:var(--coral)}
+.dot.on{background:var(--ok)}
+#status{font-size:14px;font-weight:600}
+#title{font-size:13px;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.small{border:0;background:var(--btn);color:var(--text);font:600 13px inherit;border-radius:16px;height:32px;padding:0 14px}
+main{flex:1;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:0}
+.col{display:flex;flex-direction:column;align-items:center;gap:14px}
+.mid{display:flex;flex-direction:column;align-items:center;gap:14px}
+.pill{border:0;background:var(--btn);color:var(--muted);font:700 11px inherit;letter-spacing:.1em;border-radius:14px;width:78px;height:30px}
+.dpad{position:relative;width:min(44vh,190px);height:min(44vh,190px)}
+.dpad i{position:absolute;background:var(--btn);border-radius:10px}
+.dpad .h{left:0;right:0;top:33.3%;height:33.4%}
+.dpad .v{top:0;bottom:0;left:33.3%;width:33.4%}
+.dpad b{position:absolute;width:33.4%;height:33.4%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px}
+.dpad b.on{color:var(--text);background:var(--accent);border-radius:10px}
+.dpad .u{left:33.3%;top:0}.dpad .d{left:33.3%;bottom:0}.dpad .l{left:0;top:33.3%}.dpad .r{right:0;top:33.3%}
+.face{position:relative;width:min(48vh,210px);height:min(48vh,210px)}
+.face button,.big{position:absolute;border:0;border-radius:50%;background:var(--btn);color:var(--text);font:700 22px inherit;width:34%;height:34%}
+.face button.on,.big.on,.pill.on,.sh.on{background:var(--coral);color:#1A0F08}
+.sh{border:0;background:var(--btn);color:var(--muted);font:700 15px inherit;height:42px;width:130px}
+.shoulders{display:flex;justify-content:space-between;height:46px;flex-shrink:0}
+.shoulders>div{display:flex;gap:10px}
+.stick{position:relative;width:min(40vh,170px);height:min(40vh,170px);border-radius:50%;background:var(--card);border:2px solid var(--line)}
+.knob{position:absolute;left:50%;top:50%;width:40%;height:40%;margin:-20% 0 0 -20%;border-radius:50%;background:var(--accent)}
+#overlay{position:fixed;inset:0;background:rgba(20,20,24,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px}
+#overlay[hidden]{display:none}
+#overlay h1{margin:0;font-size:22px}
+#overlay p{margin:0;color:var(--muted);max-width:40ch;line-height:1.45}
+#kbd{position:fixed;inset:auto 0 0 0;background:var(--card);padding:12px;display:flex;gap:8px}
+#kbd[hidden]{display:none}
+#kbd input{flex:1;height:44px;border-radius:12px;border:2px solid var(--line);background:var(--bg);color:var(--text);font-size:17px;padding:0 12px;-webkit-user-select:text;user-select:text}
+.rot{display:none}
+@media (orientation:portrait){.rot{display:flex;position:fixed;inset:0;background:var(--bg);align-items:center;justify-content:center;text-align:center;padding:30px;color:var(--muted);font-size:17px;z-index:5}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="dot" id="dot"></span>
+    <span id="status">Łączenie…</span>
+    <span id="title"></span>
+    <button class="small" id="kbBtn" hidden>Klawiatura</button>
+    <button class="small" id="menuBtn" hidden>Menu gry</button>
+  </header>
+  <div class="shoulders" id="shoulders"></div>
+  <main id="main"></main>
+</div>
+<div id="kbd" hidden><input id="kbIn" placeholder="Wpisz tekst i wyślij na telewizor" autocomplete="off"><button class="small" id="kbSend" style="height:44px">Wyślij</button></div>
+<div id="overlay"><h1>Łączenie z telewizorem…</h1><p>Telefon i telewizor muszą być w tej samej sieci Wi-Fi. Jeśli to trwa długo, otwórz w Retro TV ekran Kontrolery i zeskanuj kod QR jeszcze raz.</p></div>
+<div class="rot">Obróć telefon poziomo, żeby grać.</div>
+<script>
+(function(){
+const K={A:96,B:97,X:99,Y:100,L1:102,R1:103,L2:104,R2:105,START:108,SELECT:109,UP:19,DOWN:20,LEFT:21,RIGHT:22,OK:23,BACK:4,MENU:82};
+// Układy: przyciski twarzowe (etykieta, kod, pozycja w %), barki, środek.
+const LAYOUTS={
+  one:{face:[["Fire",K.A,62,33]],sh:[],mid:[["SELECT",K.SELECT],["RESET",K.START]]},
+  two:{face:[["B",K.B,8,50],["A",K.A,58,22]],sh:[],mid:[["SELECT",K.SELECT],["START",K.START]]},
+  gba:{face:[["B",K.B,8,50],["A",K.A,58,22]],sh:[["L",K.L1]],shr:[["R",K.R1]],mid:[["SELECT",K.SELECT],["START",K.START]]},
+  snes:{face:[["X",K.X,33,0],["Y",K.Y,0,33],["A",K.A,66,33],["B",K.B,33,66]],sh:[["L",K.L1]],shr:[["R",K.R1]],mid:[["SELECT",K.SELECT],["START",K.START]]},
+  genesis:{face:[["A",K.Y,0,55],["B",K.B,33,38],["C",K.A,66,21]],sh:[],mid:[["MODE",K.SELECT],["START",K.START]]},
+  full:{face:[["△",K.X,33,0],["□",K.Y,0,33],["○",K.A,66,33],["✕",K.B,33,66]],sh:[["L2",K.L2],["L1",K.L1]],shr:[["R1",K.R1],["R2",K.R2]],mid:[["SELECT",K.SELECT],["START",K.START]],stick:true},
+  menu:{face:[["Wstecz",K.BACK,0,50],["OK",K.OK,58,18]],sh:[],mid:[["MENU",K.MENU]]}
+};
+let ws=null,player=0,mode="menu",layout="menu",connected=false;
+const params=new URLSearchParams(location.search);
+const key=params.get("k")||"";
+let id=null;try{id=localStorage.getItem("rtv-id")}catch(e){}
+if(!id){id=Math.random().toString(36).slice(2,12);try{localStorage.setItem("rtv-id",id)}catch(e){}}
+const name=(/iPhone|iPad/.test(navigator.userAgent)?"iPhone":/Android/.test(navigator.userAgent)?"Telefon z Androidem":"Telefon");
+const $=s=>document.querySelector(s);
+function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function buzz(){try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}}
+function connect(){
+  ws=new WebSocket("ws://"+location.hostname+":8081/pad?k="+encodeURIComponent(key));
+  ws.onopen=()=>send({t:"hello",id:id,name:name});
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}
+    if(m.t==="welcome"){connected=true;player=m.player;mode=m.mode;layout=m.mode==="menu"?"menu":(m.layout||"two");
+      $("#overlay").hidden=true;$("#dot").classList.add("on");
+      $("#status").textContent="Gracz "+player;$("#title").textContent=m.mode==="menu"?"· sterowanie menu":"· "+(m.title||"");
+      $("#menuBtn").hidden=m.mode!=="game";$("#kbBtn").hidden=m.mode!=="menu";build();}};
+  ws.onclose=e=>{connected=false;$("#dot").classList.remove("on");
+    if(e.code===4001||e.code===4002){$("#overlay").hidden=false;$("#overlay h1").textContent=e.reason||"Odrzucono połączenie";return;}
+    $("#status").textContent="Łączenie…";setTimeout(()=>{if(!connected)$("#overlay").hidden=false},2500);setTimeout(connect,1000);};
+  ws.onerror=()=>{};
+}
+// Przytrzymanie przycisku: wspólna obsługa wielu palców.
+function bindButton(el,code){
+  const down=e=>{e.preventDefault();if(el.classList.contains("on"))return;el.classList.add("on");buzz();send({t:"k",c:code,d:1});};
+  const up=e=>{e.preventDefault();if(!el.classList.contains("on"))return;el.classList.remove("on");send({t:"k",c:code,d:0});};
+  el.addEventListener("pointerdown",down);el.addEventListener("pointerup",up);el.addEventListener("pointercancel",up);el.addEventListener("pointerleave",up);
+}
+function makeDpad(){
+  const d=document.createElement("div");d.className="dpad";
+  d.innerHTML='<i class="h"></i><i class="v"></i><b class="u">▲</b><b class="d">▼</b><b class="l">◀</b><b class="r">▶</b>';
+  let cur={x:0,y:0};const keys={u:K.UP,d:K.DOWN,l:K.LEFT,r:K.RIGHT};let held=new Set();let repeat=null;
+  function apply(x,y){
+    const dirs=new Set();if(y<-.35)dirs.add("u");if(y>.35)dirs.add("d");if(x<-.35)dirs.add("l");if(x>.35)dirs.add("r");
+    d.querySelectorAll("b").forEach(b=>b.classList.toggle("on",dirs.has(b.className.split(" ")[0])));
+    if(mode==="game"){const nx=dirs.has("l")?-1:dirs.has("r")?1:0,ny=dirs.has("u")?-1:dirs.has("d")?1:0;
+      if(nx!==cur.x||ny!==cur.y){cur={x:nx,y:ny};send({t:"m",s:"dpad",x:nx,y:ny});if(nx||ny)buzz();}}
+    else{held.forEach(k=>{if(!dirs.has(k)){send({t:"k",c:keys[k],d:0});held.delete(k)}});
+      dirs.forEach(k=>{if(!held.has(k)){held.add(k);buzz();send({t:"k",c:keys[k],d:1});send({t:"k",c:keys[k],d:0});}});
+      clearInterval(repeat);if(dirs.size)repeat=setInterval(()=>dirs.forEach(k=>{send({t:"k",c:keys[k],d:1});send({t:"k",c:keys[k],d:0})}),180);}
+  }
+  function pos(e){const r=d.getBoundingClientRect();apply((e.clientX-r.left)/r.width*2-1,(e.clientY-r.top)/r.height*2-1)}
+  let pid=null;
+  d.addEventListener("pointerdown",e=>{e.preventDefault();pid=e.pointerId;d.setPointerCapture(pid);pos(e)});
+  d.addEventListener("pointermove",e=>{if(e.pointerId===pid)pos(e)});
+  const end=e=>{if(e.pointerId!==pid)return;pid=null;clearInterval(repeat);held.clear();apply(0,0)};
+  d.addEventListener("pointerup",end);d.addEventListener("pointercancel",end);
+  return d;
+}
+function makeStick(){
+  const s=document.createElement("div");s.className="stick";const k=document.createElement("div");k.className="knob";s.appendChild(k);
+  let pid=null,last=0;
+  function pos(e){const r=s.getBoundingClientRect();let x=(e.clientX-r.left)/r.width*2-1,y=(e.clientY-r.top)/r.height*2-1;
+    const l=Math.hypot(x,y);if(l>1){x/=l;y/=l}k.style.transform="translate("+(x*75)+"%,"+(y*75)+"%)";
+    const now=Date.now();if(now-last>25){last=now;send({t:"m",s:"left",x:+x.toFixed(2),y:+y.toFixed(2)})}}
+  s.addEventListener("pointerdown",e=>{e.preventDefault();pid=e.pointerId;s.setPointerCapture(pid);pos(e)});
+  s.addEventListener("pointermove",e=>{if(e.pointerId===pid)pos(e)});
+  const end=e=>{if(e.pointerId!==pid)return;pid=null;k.style.transform="";send({t:"m",s:"left",x:0,y:0})};
+  s.addEventListener("pointerup",end);s.addEventListener("pointercancel",end);
+  return s;
+}
+function build(){
+  const L=LAYOUTS[layout]||LAYOUTS.two;const main=$("#main");main.innerHTML="";
+  const left=document.createElement("div");left.className="col";left.appendChild(makeDpad());
+  if(L.stick)left.appendChild(makeStick());
+  const mid=document.createElement("div");mid.className="mid";
+  L.mid.forEach(([t,c])=>{const b=document.createElement("button");b.className="pill";b.textContent=t;bindButton(b,c);mid.appendChild(b)});
+  const face=document.createElement("div");face.className="face";
+  L.face.forEach(([t,c,x,y])=>{const b=document.createElement("button");b.textContent=t;b.style.left=x+"%";b.style.top=y+"%";
+    if(t.length>2){b.style.fontSize="15px";b.style.width="40%";b.style.height="40%"}bindButton(b,c);face.appendChild(b)});
+  main.append(left,mid,face);
+  const sh=$("#shoulders");sh.innerHTML="";const sl=document.createElement("div"),sr=document.createElement("div");
+  (L.sh||[]).forEach(([t,c])=>{const b=document.createElement("button");b.className="sh";b.style.borderRadius="22px 10px 10px 10px";b.textContent=t;bindButton(b,c);sl.appendChild(b)});
+  (L.shr||[]).forEach(([t,c])=>{const b=document.createElement("button");b.className="sh";b.style.borderRadius="10px 22px 10px 10px";b.textContent=t;bindButton(b,c);sr.appendChild(b)});
+  sh.append(sl,sr);sh.style.visibility=(L.sh&&L.sh.length)||(L.shr&&L.shr.length)?"visible":"hidden";
+}
+$("#menuBtn").addEventListener("click",()=>{buzz();send({t:"menu"})});
+$("#kbBtn").addEventListener("click",()=>{const k=$("#kbd");k.hidden=!k.hidden;if(!k.hidden)$("#kbIn").focus()});
+$("#kbSend").addEventListener("click",()=>{send({t:"text",v:$("#kbIn").value});$("#kbd").hidden=true;$("#kbIn").blur()});
+$("#kbIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("#kbSend").click()});
+document.addEventListener("contextmenu",e=>e.preventDefault());
+setInterval(()=>send({t:"ping"}),5000);
+build();connect();
+})();
+</script>
+</body>
+</html>

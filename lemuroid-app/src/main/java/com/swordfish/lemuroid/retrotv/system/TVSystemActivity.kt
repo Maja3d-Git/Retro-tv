@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import com.swordfish.lemuroid.BuildConfig
 import com.swordfish.lemuroid.retrotv.RetroTvLog
+import com.swordfish.lemuroid.retrotv.pad.PhonePadServer
+import androidx.compose.runtime.collectAsState
 import com.swordfish.lemuroid.retrotv.update.ReleaseInfo
 import com.swordfish.lemuroid.retrotv.update.Updater
 import kotlinx.coroutines.launch
@@ -423,29 +425,76 @@ private fun NetworkSection() {
 
 @Composable
 private fun ControllersSection() {
+    val context = LocalContext.current
     var list by remember { mutableStateOf(SystemStatus.controllers()) }
-    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SectionTitle("Kontrolery", "Pady wykryte przez system (Bluetooth i USB)")
-        Panel {
-            if (list.isEmpty()) {
+    val phones by PhonePadServer.phones.collectAsState()
+    val ip = remember { SystemStatus.network(context).ipAddress }
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            SectionTitle("Kontrolery", "Pady Bluetooth i USB oraz telefony jako pady")
+            Panel {
+                Text("Pady", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                if (list.isEmpty()) {
+                    Text(
+                        "Nie wykryto żadnego pada. Sparuj pad w Ustawieniach Android TV → Piloty i akcesoria.",
+                        color = K.muted,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                    )
+                } else {
+                    list.forEachIndexed { i, c -> InfoRow("Gracz ${i + 1}: ${c.name}", c.detail, K.ok) }
+                }
+            }
+            Panel {
+                Text("Telefony", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                if (phones.isEmpty()) {
+                    Text("Brak połączonych telefonów.", color = K.muted, fontSize = 15.sp)
+                } else {
+                    phones.forEach { p ->
+                        InfoRow("Telefon ${p.player}: ${p.name}", "gracz ${list.size + p.player} w grze", K.ok)
+                    }
+                }
                 Text(
-                    "Nie wykryto żadnego pada. Sparuj pad w Ustawieniach Android TV → Piloty i akcesoria.",
+                    "W menu telefon działa jak pilot, a w grze jak pad z przyciskami danej konsoli. " +
+                        "Do $MAX_PHONES_TEXT telefonów naraz.",
                     color = K.muted,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
                 )
+            }
+            Row { TvButton("Odśwież listę", onClick = { list = SystemStatus.controllers() }) }
+        }
+        Column(
+            Modifier
+                .width(230.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(K.card)
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Telefon jako pad", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            if (ip != null) {
+                val url = PhonePadServer.pairingUrl(context, ip)
+                QrImage(url, Modifier.size(180.dp))
+                Text(
+                    "Zeskanuj aparatem telefonu w tej samej sieci Wi-Fi i obróć telefon poziomo.",
+                    color = K.muted,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+                Text(url, color = K.muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             } else {
-                list.forEachIndexed { i, c -> InfoRow("Pad ${i + 1}: ${c.name}", c.detail, K.ok) }
+                Text("Brak połączenia z siecią lokalną.", color = K.coral, fontSize = 14.sp)
             }
         }
-        Text(
-            "Telefon jako pad (kod QR) pojawi się w kolejnej wersji.",
-            color = K.muted,
-            fontSize = 14.sp,
-        )
-        Row { TvButton("Odśwież listę", onClick = { list = SystemStatus.controllers() }) }
     }
 }
+
+private const val MAX_PHONES_TEXT = "4"
 
 // ---------- Dziennik ----------
 

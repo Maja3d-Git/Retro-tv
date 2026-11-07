@@ -14,6 +14,7 @@ import com.swordfish.lemuroid.app.utils.android.isMainProcess
 import com.swordfish.lemuroid.ext.feature.context.ContextHandler
 import com.swordfish.lemuroid.lib.injection.HasWorkerInjector
 import com.swordfish.lemuroid.retrotv.RetroTvLog
+import com.swordfish.lemuroid.retrotv.pad.PhonePadLifecycle
 import dagger.android.AndroidInjector
 import dagger.android.DispatchingAndroidInjector
 import dagger.android.support.DaggerApplication
@@ -28,6 +29,7 @@ class LemuroidApplication : DaggerApplication(), HasWorkerInjector, ImageLoaderF
         super.onCreate()
 
         RetroTvLog.init(this, if (isMainProcess()) "main" else "game")
+        PhonePadLifecycle.install(this)
 
         val initializeComponent =
             if (isMainProcess()) {

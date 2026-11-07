@@ -5,7 +5,12 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.InputDevice
 import android.view.MotionEvent
+import com.swordfish.lemuroid.retrotv.pad.PadLayouts
+import com.swordfish.lemuroid.retrotv.pad.PadSink
+import com.swordfish.lemuroid.retrotv.pad.PadSinkProvider
+import com.swordfish.libretrodroid.GLRetroView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -49,7 +54,7 @@ import timber.log.Timber
 import javax.inject.Inject
 
 @OptIn(DelicateCoroutinesApi::class)
-abstract class BaseGameActivity : ImmersiveActivity() {
+abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
     protected lateinit var game: Game
     private lateinit var system: GameSystem
     protected lateinit var systemCoreConfig: SystemCoreConfig
@@ -151,6 +156,52 @@ abstract class BaseGameActivity : ImmersiveActivity() {
 
     @Composable
     abstract fun GameScreen(viewModel: BaseGameScreenViewModel)
+
+    // Retro TV: przyciski z telefonów trafiają do kolejnych portów po fizycznych padach.
+    override fun padSink(): PadSink {
+        val physicalPads =
+            InputDevice.getDeviceIds().toList()
+                .mapNotNull { InputDevice.getDevice(it) }
+                .filter { !it.isVirtual && (it.sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD) }
+                .distinctBy { it.descriptor }
+                .size
+        return object : PadSink {
+            override val mode = "game"
+            override val layout = PadLayouts.forSystem(game.systemId)
+            override val title = game.displayName()
+
+            private fun port(player: Int) = (physicalPads + player - 1).coerceIn(0, 7)
+
+            override fun onKey(
+                player: Int,
+                keyCode: Int,
+                pressed: Boolean,
+            ) {
+                val action = if (pressed) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
+                baseGameScreenViewModel.sendRemoteKey(action, keyCode, port(player))
+            }
+
+            override fun onMotion(
+                player: Int,
+                source: String,
+                x: Float,
+                y: Float,
+            ) {
+                val src =
+                    when (source) {
+                        "dpad" -> GLRetroView.MOTION_SOURCE_DPAD
+                        "left" -> GLRetroView.MOTION_SOURCE_ANALOG_LEFT
+                        "right" -> GLRetroView.MOTION_SOURCE_ANALOG_RIGHT
+                        else -> return
+                    }
+                baseGameScreenViewModel.sendRemoteMotion(src, x, y, port(player))
+            }
+
+            override fun onMenu(player: Int) {
+                baseGameScreenViewModel.requestRemoteMenu()
+            }
+        }
+    }
 
     private fun initialiseFlows() {
         launchOnState(Lifecycle.State.CREATED) {

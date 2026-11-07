@@ -218,6 +218,7 @@ dependencies {
     implementation(deps.libs.composeHtmlText)
 
     implementation("com.google.zxing:core:3.5.3")
+    implementation("org.java-websocket:Java-WebSocket:1.5.7")
 
     implementation(deps.libs.composeSettings.uiTiles)
     implementation(deps.libs.composeSettings.uiTilesExtended)

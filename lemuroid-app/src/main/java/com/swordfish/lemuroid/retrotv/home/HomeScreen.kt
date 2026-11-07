@@ -58,6 +58,7 @@ import com.swordfish.lemuroid.app.shared.systems.MetaSystemInfo
 import com.swordfish.lemuroid.lib.library.GameSystem
 import com.swordfish.lemuroid.lib.library.MetaSystemID
 import com.swordfish.lemuroid.lib.library.db.entity.Game
+import com.swordfish.lemuroid.retrotv.pad.PhonePadServer
 import com.swordfish.lemuroid.retrotv.ui.K
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
 import com.swordfish.lemuroid.retrotv.ui.TvButton
@@ -276,6 +277,11 @@ private fun TopBar(
         if (state.indexing) Chip("Skanowanie biblioteki…", K.accent)
         Spacer(Modifier.width(8.dp))
         Chip(if (pads == 0) "Brak pada" else if (pads == 1) "1 pad" else "$pads pady", if (pads > 0) K.ok else K.muted)
+        val phones by PhonePadServer.phones.collectAsState()
+        if (phones.isNotEmpty()) {
+            Spacer(Modifier.width(8.dp))
+            Chip(if (phones.size == 1) "1 telefon" else "${phones.size} telefony", K.ok)
+        }
         Spacer(Modifier.width(8.dp))
         Chip(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), null)
     }

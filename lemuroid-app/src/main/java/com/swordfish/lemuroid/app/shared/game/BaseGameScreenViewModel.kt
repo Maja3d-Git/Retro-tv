@@ -284,6 +284,28 @@ class BaseGameScreenViewModel(
             }
         }
 
+    // Retro TV: wejście z pada w telefonie.
+    fun sendRemoteKey(
+        action: Int,
+        keyCode: Int,
+        port: Int,
+    ) {
+        retroGameView.retroGameView?.sendKeyEvent(action, keyCode, port)
+    }
+
+    fun sendRemoteMotion(
+        source: Int,
+        x: Float,
+        y: Float,
+        port: Int,
+    ) {
+        retroGameView.retroGameView?.sendMotionEvent(source, x, y, port)
+    }
+
+    fun requestRemoteMenu() {
+        sideEffects.showMenu(tilt, inputs)
+    }
+
     fun requestFinish() {
         if (loadingState.value) return
         viewModelScope.launch {

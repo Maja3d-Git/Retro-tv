@@ -65,6 +65,11 @@ class PhonePadActivity : ComponentActivity() {
     @Volatile
     private var destroyed = false
 
+    @Volatile
+    private var connecting = false
+
+    private var wasStopped = false
+
     private val prefs by lazy { getSharedPreferences("retrotv_share", Context.MODE_PRIVATE) }
 
     private val filePicker =
@@ -104,15 +109,38 @@ class PhonePadActivity : ComponentActivity() {
         setContentView(web)
     }
 
-    override fun onDestroy() {
-        destroyed = true
+    /** Zamyka oba połączenia (np. gdy aplikacja schodzi z ekranu). */
+    private fun disconnectAll() {
         relay?.let { r ->
             r.send(PadRelay.inTopic(code), JSONObject().put("t", "bye").put("cid", cid))
             r.close()
         }
         relay = null
-        runCatching { lan?.close() }
+        relayReady = false
+        val l = lan
         lan = null
+        runCatching { l?.close() }
+        connecting = false
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // W tle Android i tak zrywa połączenia – zamykamy je sami i łączymy od nowa po powrocie.
+        wasStopped = true
+        disconnectAll()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (wasStopped) {
+            wasStopped = false
+            closed(1006, "")
+        }
+    }
+
+    override fun onDestroy() {
+        destroyed = true
+        disconnectAll()
         web.destroy()
         super.onDestroy()
     }
@@ -163,33 +191,56 @@ class PhonePadActivity : ComponentActivity() {
     // ---------- połączenie ----------
 
     private fun startConnection() {
-        if (destroyed) return
+        if (destroyed || wasStopped || connecting) return
         if (relayReady) {
             // Ponowne połączenie strony przez internet – serwer jest już gotowy.
             opened()
             return
         }
+        if (lan?.isOpen == true) {
+            opened()
+            return
+        }
+        connecting = true
+        // Zapamiętany telewizor: łączymy od razu, bez szukania w sieci.
+        val last = prefs.getString("last_host", null)
+        val lastHost = last?.substringBefore(':')?.takeIf { it.isNotBlank() }
+        val lastPort = last?.substringAfter(':', "")?.toIntOrNull() ?: com.swordfish.lemuroid.retrotv.pad.PhonePadServer.HTTP_PORT
+        if (lastHost != null) {
+            status("Łączę z telewizorem…")
+            tryLan(lastHost, lastPort) { searchAndConnect() }
+        } else {
+            searchAndConnect()
+        }
+    }
+
+    private fun searchAndConnect() {
         status("Szukam telewizora w sieci domowej…")
         findTv { host, port ->
-            if (destroyed) return@findTv
-            if (host == null) {
-                startRelay()
-            } else {
-                tryLan(host, port)
-            }
+            if (destroyed || wasStopped) return@findTv
+            if (host == null) startRelay() else tryLan(host, port) { startRelay() }
         }
     }
 
     private fun tryLan(
         host: String,
         httpPort: Int,
+        onFail: () -> Unit,
     ) {
+        var failed = false
+
+        fun fail() {
+            if (failed) return
+            failed = true
+            main.post { if (!destroyed && !wasStopped) onFail() }
+        }
         var wasOpen = false
         val uri = URI("ws://$host:${httpPort + 1}/pad?k=${Uri.encode(code)}")
         val client =
             object : WebSocketClient(uri) {
                 override fun onOpen(handshakedata: ServerHandshake?) {
                     wasOpen = true
+                    connecting = false
                     prefs.edit().putString("last_host", "$host:$httpPort").apply()
                     Timber.i("Pad: połączono w sieci domowej z %s", host)
                     status("Połączono przez sieć domową")
@@ -207,8 +258,8 @@ class PhonePadActivity : ComponentActivity() {
                     if (wasOpen) {
                         closed(code, reason ?: "")
                     } else {
-                        Timber.w("Pad: sieć domowa niedostępna (%d %s), przechodzę na internet", code, reason)
-                        main.post { startRelay() }
+                        Timber.w("Pad: sieć domowa niedostępna (%d %s)", code, reason)
+                        fail()
                     }
                 }
 
@@ -218,13 +269,13 @@ class PhonePadActivity : ComponentActivity() {
             }
         client.connectionLostTimeout = 10
         lan = client
-        runCatching { client.connect() }.onFailure { main.post { startRelay() } }
+        runCatching { client.connect() }.onFailure { fail() }
         // Brak odpowiedzi w sieci domowej – nie czekamy dłużej niż kilka sekund.
         main.postDelayed({
             if (!wasOpen && lan === client) {
                 lan = null
                 runCatching { client.close() }
-                startRelay()
+                fail()
             }
         }, 4_000)
     }
@@ -244,11 +295,13 @@ class PhonePadActivity : ComponentActivity() {
                     }
                 },
                 onState = { ok ->
-                    if (ok && !relayReady) {
+                    if (ok) {
+                        // Także po ponownym połączeniu z serwerem – strona wysyła wtedy „hello” jeszcze raz.
                         relayReady = true
+                        connecting = false
                         status("Połączono przez internet – czekam na telewizor…")
                         opened()
-                    } else if (!ok) {
+                    } else {
                         status("Brak internetu. Sprawdź połączenie telefonu.")
                     }
                 },

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -140,36 +141,52 @@ class RetroGameMenuActivity : ImmersiveActivity() {
         val currentDisk = intent.getIntExtra(GameMenuContract.EXTRA_CURRENT_DISK, 0)
         val states = core.statesSupported
 
-        Row(Modifier.fillMaxSize().background(Color(0x99000000))) {
-            Column(Modifier.weight(1f).fillMaxHeight().padding(40.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xE6000000), Color(0x99000000)))),
+        ) {
+            Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 48.dp, vertical = 40.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("PAUZA", color = Color(0xFFFFB089), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                Text(game.displayName(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+                Text(
+                    game.displayName(),
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = RetroTvTheme.display,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Spacer(Modifier.weight(1f))
-                if (states && slots.isNotEmpty() && page == Page.MAIN) {
-                    Text("ZAPISY STANU", color = Color(0xFFDDDDDD), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                val saved = slots.withIndex().filter { it.value.first.exists }
+                if (states && saved.isNotEmpty() && page == Page.MAIN) {
+                    Text("OSTATNIE ZAPISY", color = Color(0xFFDDDDDD), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                    Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        slots.take(4).forEachIndexed { i, (info, bmp) -> SlotThumb(i, info, bmp, Modifier.width(150.dp), focusable = false) {} }
+                        saved.sortedByDescending { it.value.first.date }.take(3).forEach { (i, pair) -> SlotCard(i, pair.first, pair.second) }
                     }
                 }
             }
+            Column(Modifier.width(400.dp).fillMaxHeight().background(K.nav).padding(horizontal = 20.dp, vertical = 28.dp)) {
             Column(
                 Modifier
-                    .width(380.dp)
-                    .fillMaxHeight()
-                    .background(K.nav)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 val first = remember(page) { FocusRequester() }
                 LaunchedEffect(page) { runCatching { first.requestFocus() } }
                 when (page) {
                     Page.MAIN -> {
                         MenuItem("Wznów grę", modifier = Modifier.focusRequester(first)) { finishWith {} }
+                        MenuLabel("GRA")
                         if (states) {
                             MenuItem("Zapisz stan", "wybierz slot") { page = Page.SAVE }
                             MenuItem("Wczytaj stan", if (slots.any { it.first.exists }) "wybierz slot" else "brak zapisów", enabled = slots.any { it.first.exists }) { page = Page.LOAD }
                         }
+                        MenuItem("Zacznij od nowa") { finishWith { putExtra(GameMenuContract.RESULT_RESET, true) } }
+                        MenuLabel("OPCJE")
                         if (ffSupported) {
                             MenuItem("Przyspieszenie", if (ff) "włączone" else "wyłączone") {
                                 finishWith { putExtra(GameMenuContract.RESULT_ENABLE_FAST_FORWARD, !ff) }
@@ -179,17 +196,15 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                             finishWith { putExtra(GameMenuContract.RESULT_ENABLE_AUDIO, !audio) }
                         }
                         if (disks > 1) MenuItem("Zmień płytę", "płyta ${currentDisk + 1} z $disks") { page = Page.DISK }
-                        MenuItem("Zacznij od nowa") { finishWith { putExtra(GameMenuContract.RESULT_RESET, true) } }
+                        MenuItem("Ustawienia emulatora", "filtry, rdzeń") { openLegacyMenu() }
+                        MenuLabel("ONLINE")
                         if (netplay.active) {
                             MenuItem("Pokój ${netplay.code}", "goście: ${netplay.guests.count { it.connected }}") { page = Page.NETPLAY }
                         } else {
-                            MenuItem("Graj przez internet", "utwórz pokój z kodem") {
+                            MenuItem("Graj przez internet", "nowy pokój") {
                                 finishWith { putExtra(com.swordfish.lemuroid.app.shared.game.BaseGameActivity.RETROTV_NETPLAY, "start") }
                             }
                         }
-                        MenuItem("Więcej opcji emulatora", "filtry, sterowanie, rdzeń") { openLegacyMenu() }
-                        Spacer(Modifier.height(8.dp))
-                        MenuItem("Wyjdź do biblioteki", danger = true) { finishWith { putExtra(GameMenuContract.RESULT_QUIT, true) } }
                     }
                     Page.SAVE, Page.LOAD -> {
                         val saving = page == Page.SAVE
@@ -243,6 +258,46 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                     }
                 }
             }
+            if (page == Page.MAIN) {
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(K.line))
+                Spacer(Modifier.height(8.dp))
+                MenuItem("Wyjdź do biblioteki", danger = true) { finishWith { putExtra(GameMenuContract.RESULT_QUIT, true) } }
+            }
+            }
+        }
+    }
+
+    @Composable
+    private fun MenuLabel(text: String) {
+        Text(
+            text,
+            color = K.muted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.5.sp,
+            modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp),
+        )
+    }
+
+    /** Karta zapisu na ekranie pauzy: miniatura nad podpisem (bez łamania tekstu). */
+    @Composable
+    private fun SlotCard(
+        index: Int,
+        info: SaveInfo,
+        preview: Bitmap?,
+    ) {
+        val date = SimpleDateFormat("d MMM, HH:mm", Locale("pl")).format(Date(info.date))
+        Column(
+            Modifier.width(170.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x33FFFFFF)).padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f).clip(RoundedCornerShape(8.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
+                if (preview != null) {
+                    Image(preview.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
+            }
+            Text("Slot ${index + 1} · $date", color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 
@@ -260,7 +315,7 @@ class RetroGameMenuActivity : ImmersiveActivity() {
         Row(
             modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .height(50.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (focused) K.accent else Color.Transparent)
                 .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
@@ -278,9 +333,21 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                     },
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (value != null) Text(value, color = if (focused) K.onAccent else K.muted, fontSize = 14.sp)
+            if (value != null) {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    value,
+                    color = if (focused) K.onAccent else K.muted,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 150.dp),
+                )
+            }
         }
     }
 

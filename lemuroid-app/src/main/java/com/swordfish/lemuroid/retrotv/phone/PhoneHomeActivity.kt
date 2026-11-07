@@ -157,7 +157,14 @@ class PhoneHomeActivity : ComponentActivity() {
             }
             updateStatus?.let { Text(it, color = K.muted, fontSize = 14.sp) }
             Text("Telefon jako pad i pilot do Retro TV na telewizorze.", color = K.muted, fontSize = 16.sp)
-            TvButton("Zeskanuj kod QR z telewizora", primary = true, modifier = Modifier.fillMaxWidth(), onClick = {
+            val remembered = remember { prefs.getString("last_host", null)?.takeIf { code.isNotBlank() } }
+            if (remembered != null) {
+                TvButton("Połącz z telewizorem", primary = true, modifier = Modifier.fillMaxWidth(), onClick = {
+                    PhonePadActivity.start(this@PhoneHomeActivity, code.trim().lowercase())
+                })
+                Text("Zapamiętany telewizor: ${remembered.substringBefore(':')}", color = K.muted, fontSize = 13.sp)
+            }
+            TvButton("Zeskanuj kod QR z telewizora", primary = remembered == null, modifier = Modifier.fillMaxWidth(), onClick = {
                 scanQr { error = it }
             })
             Text("Na telewizorze: Kontrolery. Po zeskanowaniu pad otworzy się sam.", color = K.muted, fontSize = 13.sp)

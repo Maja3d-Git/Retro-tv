@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import com.swordfish.lemuroid.app.tv.main.MainTVActivity
+import com.swordfish.lemuroid.app.tv.shared.TVHelper
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -115,6 +117,14 @@ class MainActivity : RetrogradeComponentActivity(), BusyActivity {
             SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+
+        // Retro TV: na telewizorze zawsze otwieramy interfejs TV, niezależnie od tego,
+        // skąd aplikacja została uruchomiona (np. przycisk "Otwórz" w Downloaderze).
+        if (TVHelper.isTV(this)) {
+            startActivity(Intent(this, MainTVActivity::class.java))
+            finish()
+            return
+        }
 
         GlobalScope.safeLaunch {
             reviewManager.initialize(applicationContext)

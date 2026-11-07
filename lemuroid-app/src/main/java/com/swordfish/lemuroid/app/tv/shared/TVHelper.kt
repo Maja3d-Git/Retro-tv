@@ -1,6 +1,9 @@
 package com.swordfish.lemuroid.app.tv.shared
 
+import android.app.UiModeManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Environment
 
@@ -23,6 +26,9 @@ object TVHelper {
 
     fun isTV(context: Context): Boolean {
         val packageManager = context.packageManager
-        return packageManager.hasSystemFeature("android.hardware.type.television")
+        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+        return packageManager.hasSystemFeature("android.hardware.type.television") ||
+            packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
     }
 }

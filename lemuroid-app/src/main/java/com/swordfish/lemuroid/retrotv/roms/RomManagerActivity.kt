@@ -260,6 +260,9 @@ private fun ListRow(
     }
 }
 
+private val noPickerMessage =
+    "Ten telewizor nie ma systemowego okna wyboru folderów. Użyj wbudowanej przeglądarki (pierwszy przycisk)."
+
 // ---------- Foldery ----------
 
 @Composable

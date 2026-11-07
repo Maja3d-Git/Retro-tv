@@ -9,4 +9,5 @@ enum class TVSettingType(val icon: Int, val text: Int) {
     CHOOSE_DIRECTORY(R.drawable.ic_folder_white_64dp, R.string.directory),
     SETTINGS(R.drawable.ic_settings_white_64dp, R.string.settings),
     SAVE_SYNC(R.drawable.ic_cloud_sync_64dp, R.string.save_sync),
+    SYSTEM(R.drawable.ic_retrotv_system_64dp, R.string.retrotv_system),
 }

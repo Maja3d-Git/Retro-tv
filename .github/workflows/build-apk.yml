@@ -26,10 +26,22 @@ jobs:
       - name: Build release APK (free, cores downloaded on demand)
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :lemuroid-app:assembleFreeDynamicRelease
+          BUILD_TIME="$(TZ=Europe/Warsaw date '+%Y-%m-%d %H:%M')"
+          ./gradlew --no-daemon :lemuroid-app:assembleFreeDynamicRelease \
+            -PretrotvBuild=${{ github.run_number }} \
+            "-PretrotvBuildTime=$BUILD_TIME"
 
       - name: Rename APK
         run: cp lemuroid-app/build/outputs/apk/freeDynamic/release/lemuroid-app-free-dynamic-release.apk retro-tv.apk
+
+      - name: Release notes
+        run: |
+          {
+            git log -1 --format='%s%n%n%b' | grep -v -E '^(Co-Authored-By|Claude-Session):'
+            echo
+            echo "Wersja 1.0.${{ github.run_number }} · commit ${GITHUB_SHA::7}"
+          } > release-notes.md
+          cat release-notes.md
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -41,6 +53,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Retro TV build ${{ github.run_number }}
+          name: Retro TV 1.0.${{ github.run_number }}
           make_latest: true
+          body_path: release-notes.md
           files: retro-tv.apk

@@ -26,6 +26,7 @@ import com.swordfish.lemuroid.app.shared.settings.StorageFrameworkPickerLauncher
 import com.swordfish.lemuroid.app.shared.systems.MetaSystemInfo
 import com.swordfish.lemuroid.app.tv.folderpicker.TVFolderPickerLauncher
 import com.swordfish.lemuroid.app.tv.settings.TVSettingsActivity
+import com.swordfish.lemuroid.retrotv.system.TVSystemActivity
 import com.swordfish.lemuroid.app.tv.shared.GamePresenter
 import com.swordfish.lemuroid.app.tv.shared.TVHelper
 import com.swordfish.lemuroid.common.coroutines.launchOnState
@@ -78,6 +79,8 @@ class TVHomeFragment : BrowseSupportFragment() {
                                 )
                             TVSettingType.CHOOSE_DIRECTORY -> launchFolderPicker()
                             TVSettingType.SETTINGS -> launchTVSettings()
+                            TVSettingType.SYSTEM ->
+                                startActivity(Intent(requireContext(), TVSystemActivity::class.java))
                             TVSettingType.SHOW_ALL_FAVORITES -> launchFavorites()
                             TVSettingType.SAVE_SYNC ->
                                 SaveSyncWork.enqueueManualWork(
@@ -229,6 +232,7 @@ class TVHomeFragment : BrowseSupportFragment() {
 
             add(TVSetting(TVSettingType.CHOOSE_DIRECTORY, !indexInProgress))
             add(TVSetting(TVSettingType.SETTINGS, !indexInProgress))
+            add(TVSetting(TVSettingType.SYSTEM, true))
         }
     }
 

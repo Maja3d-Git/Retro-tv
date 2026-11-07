@@ -10,9 +10,16 @@ plugins {
 
 android {
     defaultConfig {
-        versionCode = 252
-        versionName = "1.17.0" // Always remember to update Cores Tag!
+        // Retro TV: numer wersji pochodzi z numeru budowania w GitHub Actions (-PretrotvBuild=N).
+        // Wersja rdzeni jest ustawiona osobno w CoreUpdaterImpl.CORES_VERSION.
+        val retrotvBuild = (project.findProperty("retrotvBuild") as String?)?.toIntOrNull() ?: 0
+        val retrotvBuildTime = (project.findProperty("retrotvBuildTime") as String?) ?: "lokalne budowanie"
+        versionCode = 300 + retrotvBuild
+        versionName = "1.0.$retrotvBuild"
         applicationId = "pl.maja3d.retrotv"
+        buildConfigField("int", "RETROTV_BUILD", "$retrotvBuild")
+        buildConfigField("String", "RETROTV_BUILD_TIME", "\"$retrotvBuildTime\"")
+        buildConfigField("String", "RETROTV_REPO", "\"Maja3d-Git/retro-tv\"")
     }
     flavorDimensions += listOf("opensource", "cores")
 
@@ -207,6 +214,8 @@ dependencies {
     implementation(deps.libs.androidx.paging.compose)
     implementation(deps.libs.androidx.lifecycle.viewModelCompose)
     implementation(deps.libs.composeHtmlText)
+
+    implementation("com.google.zxing:core:3.5.3")
 
     implementation(deps.libs.composeSettings.uiTiles)
     implementation(deps.libs.composeSettings.uiTilesExtended)

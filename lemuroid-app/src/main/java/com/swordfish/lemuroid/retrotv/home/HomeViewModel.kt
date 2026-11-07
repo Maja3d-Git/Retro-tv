@@ -74,6 +74,33 @@ class HomeViewModel(
             }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    val searchQuery = MutableStateFlow("")
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val searchResults: StateFlow<List<Game>> =
+        searchQuery
+            .flatMapLatest { q -> if (q.isBlank()) flowOf(emptyList()) else db.gameDao().search(q.trim()) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Najczęściej grane – identyfikatory z [PlayStats], odświeżane po powrocie z gry. */
+    val topIds = MutableStateFlow(PlayStats.topGameIds(appContext, 10))
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val topGames: StateFlow<List<Game>> =
+        topIds
+            .flatMapLatest { ids ->
+                if (ids.isEmpty()) {
+                    flowOf(emptyList())
+                } else {
+                    db.gameDao().observeByIds(ids).map { games -> ids.mapNotNull { id -> games.firstOrNull { it.id == id } } }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun refreshStats(appContext: Context) {
+        topIds.value = PlayStats.topGameIds(appContext, 10)
+    }
+
     private fun systems(appContext: Context): Flow<List<MetaSystemInfo>> =
         db.gameDao().selectSystemsWithCount().map { counts ->
             counts.asSequence()

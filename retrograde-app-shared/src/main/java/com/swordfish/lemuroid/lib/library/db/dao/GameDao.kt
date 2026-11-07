@@ -62,6 +62,12 @@ interface GameDao {
     @Query("SELECT * FROM games WHERE systemId IN (:systemIds) ORDER BY COALESCE(customName, title) ASC, id DESC")
     fun observeBySystems(systemIds: List<String>): Flow<List<Game>>
 
+    @Query("SELECT * FROM games WHERE COALESCE(customName, title) LIKE '%' || :query || '%' ORDER BY COALESCE(customName, title) ASC LIMIT 200")
+    fun search(query: String): Flow<List<Game>>
+
+    @Query("SELECT * FROM games WHERE id IN (:ids)")
+    fun observeByIds(ids: List<Int>): Flow<List<Game>>
+
     @Query("SELECT * FROM games WHERE isFavorite = 1 ORDER BY lastPlayedAt DESC LIMIT :limit")
     fun selectFirstFavorites(limit: Int): Flow<List<Game>>
 

@@ -31,7 +31,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import com.swordfish.lemuroid.retrotv.pad.PhonePadText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -90,12 +94,19 @@ interface HomeActions {
     fun openControllers()
 
     fun openSystem()
+
+    /** Usuwa plik gry; zwraca komunikat dla użytkownika. */
+    fun deleteGame(game: Game): String
 }
 
 private sealed class Screen {
     object Start : Screen()
 
+    object Search : Screen()
+
     data class Library(val meta: MetaSystemID) : Screen()
+
+    data class Details(val gameId: Int, val from: Screen) : Screen()
 }
 
 @Composable
@@ -106,22 +117,38 @@ fun HomeScreen(
 ) {
     val state by viewModel.home.collectAsState()
     val libraryGames by viewModel.libraryGames.collectAsState()
+    val topGames by viewModel.topGames.collectAsState()
     var screen by remember { mutableStateOf<Screen>(Screen.Start) }
 
     fun open(s: Screen) {
         screen = s
-        viewModel.selectedSystem.value = (s as? Screen.Library)?.meta
+        val base = (s as? Screen.Details)?.from ?: s
+        (base as? Screen.Library)?.let { viewModel.selectedSystem.value = it.meta }
     }
+    val showDetails: (Game) -> Unit = { g -> open(Screen.Details(g.id, (screen as? Screen.Details)?.from ?: screen)) }
 
-    BackHandler(enabled = screen != Screen.Start) { open(Screen.Start) }
+    BackHandler(enabled = screen != Screen.Start) {
+        val s = screen
+        open(if (s is Screen.Details) s.from else Screen.Start)
+    }
 
     Box(Modifier.fillMaxSize().background(K.bg)) {
         Row(Modifier.fillMaxSize()) {
             Rail(state, screen, actions, onOpen = { open(it) })
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (val s = screen) {
-                    Screen.Start -> StartContent(state, actions, onOpenSystem = { open(Screen.Library(it)) })
-                    is Screen.Library -> LibraryContent(s.meta, state, libraryGames, actions)
+                    Screen.Start -> StartContent(state, topGames, actions, showDetails, onOpenSystem = { open(Screen.Library(it)) })
+                    Screen.Search -> SearchContent(viewModel, state, actions, showDetails)
+                    is Screen.Library -> LibraryContent(s.meta, state, libraryGames, actions, showDetails)
+                    is Screen.Details -> {
+                        val all = state.recent + state.favorites + topGames + (libraryGames ?: emptyList()) + viewModel.searchResults.collectAsState().value
+                        val game = all.firstOrNull { it.id == s.gameId }
+                        if (game == null) {
+                            LaunchedEffect(s) { open(s.from) }
+                        } else {
+                            DetailsContent(game, state, actions) { open(s.from) }
+                        }
+                    }
                 }
             }
         }
@@ -158,6 +185,7 @@ private fun Rail(
             Text("RETRO TV", color = K.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
         }
         RailItem("Start", screen == Screen.Start) { onOpen(Screen.Start) }
+        RailItem("Szukaj", screen == Screen.Search) { onOpen(Screen.Search) }
 
         if (state.systems.isNotEmpty()) {
             RailLabel("KONSOLE")
@@ -322,7 +350,9 @@ private fun countPads(): Int =
 @Composable
 private fun StartContent(
     state: HomeViewModel.HomeState,
+    topGames: List<Game>,
     actions: HomeActions,
+    onDetails: (Game) -> Unit,
     onOpenSystem: (MetaSystemID) -> Unit,
 ) {
     val firstFocus = remember { FocusRequester() }
@@ -340,19 +370,21 @@ private fun StartContent(
             .padding(horizontal = 32.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        TopBar("Start", null, state)
+        val totalMs = PlayStats.totalMs(LocalContext.current)
+        TopBar("Start", if (totalMs > 60_000) "Łączny czas gry: ${PlayStats.format(totalMs)}" else null, state)
 
         if (empty) {
             EmptyLibrary(state, actions, firstFocus)
         }
 
         if (!empty && continueGame != null) {
-            ContinueCard(continueGame, actions, firstFocus)
+            ContinueCard(continueGame, actions, firstFocus, onDetails)
         }
 
         val recent = state.recent.filter { it.id != continueGame?.id }
-        if (recent.isNotEmpty()) GameRow("Ostatnio grane", recent, actions)
-        if (state.favorites.isNotEmpty()) GameRow("Ulubione", state.favorites, actions)
+        if (!empty && recent.isNotEmpty()) GameRow("Ostatnio grane", recent, actions, onDetails)
+        if (!empty && state.favorites.isNotEmpty()) GameRow("Ulubione", state.favorites, actions, onDetails)
+        if (!empty && topGames.size >= 2) GameRow("Najczęściej grane", topGames, actions, onDetails)
 
         if (!empty && state.systems.isNotEmpty()) {
             Text("Twoje konsole", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -414,6 +446,7 @@ private fun ContinueCard(
     game: Game,
     actions: HomeActions,
     focus: FocusRequester,
+    onDetails: (Game) -> Unit,
 ) {
     val context = LocalContext.current
     Row(
@@ -444,7 +477,7 @@ private fun ContinueCard(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TvButton("Graj", primary = true, onClick = { actions.play(game) }, modifier = Modifier.focusRequester(focus))
                 TvButton("Od nowa", onClick = { actions.restart(game) })
-                TvButton(if (game.isFavorite) "Usuń z ulubionych" else "Do ulubionych", onClick = { actions.toggleFavorite(game) })
+                TvButton("Szczegóły", onClick = { onDetails(game) })
             }
         }
     }
@@ -455,11 +488,12 @@ private fun GameRow(
     title: String,
     games: List<Game>,
     actions: HomeActions,
+    onDetails: (Game) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, color = K.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
-            items(games, key = { it.id }) { game -> GameTile(game, actions, Modifier.width(150.dp)) }
+            items(games, key = { it.id }) { game -> GameTile(game, actions, onDetails, Modifier.width(150.dp)) }
         }
     }
 }
@@ -496,6 +530,7 @@ private fun LibraryContent(
     state: HomeViewModel.HomeState,
     games: List<Game>?,
     actions: HomeActions,
+    onDetails: (Game) -> Unit,
 ) {
     val context = LocalContext.current
     val firstFocus = remember { FocusRequester() }
@@ -518,7 +553,7 @@ private fun LibraryContent(
             ) {
                 items(games, key = { it.id }) { game ->
                     val mod = if (game.id == games.first().id) Modifier.focusRequester(firstFocus) else Modifier
-                    GameTile(game, actions, mod)
+                    GameTile(game, actions, onDetails, mod)
                 }
             }
         }
@@ -534,7 +569,7 @@ private fun HintBar() {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Hint("OK / A", "Graj")
-        Hint("Y / Menu", "Ulubiona")
+        Hint("Y / Menu", "Szczegóły")
         Hint("Wstecz / B", "Start")
     }
 }
@@ -559,6 +594,7 @@ private fun Hint(
 private fun GameTile(
     game: Game,
     actions: HomeActions,
+    onDetails: (Game) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -571,7 +607,7 @@ private fun GameTile(
                 if ((code == KeyEvent.KEYCODE_BUTTON_Y || code == KeyEvent.KEYCODE_MENU) &&
                     event.nativeKeyEvent.action == KeyEvent.ACTION_UP
                 ) {
-                    actions.toggleFavorite(game)
+                    onDetails(game)
                     true
                 } else {
                     code == KeyEvent.KEYCODE_BUTTON_Y || code == KeyEvent.KEYCODE_MENU
@@ -640,6 +676,126 @@ private fun Cover(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+}
+
+// ---------- Szczegóły gry ----------
+
+@Composable
+private fun DetailsContent(
+    game: Game,
+    state: HomeViewModel.HomeState,
+    actions: HomeActions,
+    onClose: () -> Unit,
+) {
+    val context = LocalContext.current
+    val focus = remember { FocusRequester() }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(game.id) {
+        delay(50)
+        runCatching { focus.requestFocus() }
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        TopBar("Szczegóły gry", null, state)
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            Box(Modifier.width(220.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp))) {
+                Cover(game, Modifier.fillMaxSize(), titleSize = 20)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(game.displayName(), color = K.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+                Text(systemName(context, game) + (game.developer?.let { " · $it" } ?: ""), color = K.muted, fontSize = 15.sp)
+                Spacer(Modifier.height(6.dp))
+                DetailRow("Ostatnio", lastPlayed(game))
+                DetailRow("Czas gry", PlayStats.format(PlayStats.timeMs(context, game.id)).let { if (PlayStats.sessions(context, game.id) == 0) "—" else it })
+                DetailRow("Uruchomienia", PlayStats.sessions(context, game.id).toString())
+                DetailRow("Plik", game.fileName)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TvButton("Graj", primary = true, onClick = { actions.play(game) }, modifier = Modifier.focusRequester(focus))
+                    TvButton("Od nowa", onClick = { actions.restart(game) })
+                    TvButton(if (game.isFavorite) "Usuń z ulubionych" else "Do ulubionych", onClick = { actions.toggleFavorite(game) })
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (confirmDelete) {
+                        TvButton("Tak, usuń plik gry", primary = true, onClick = {
+                            info = actions.deleteGame(game)
+                            confirmDelete = false
+                        })
+                        TvButton("Anuluj", onClick = { confirmDelete = false })
+                    } else {
+                        TvButton("Usuń grę", onClick = { confirmDelete = true })
+                        TvButton("Wróć", onClick = onClose)
+                    }
+                }
+                info?.let { Text(it, color = K.muted, fontSize = 14.sp, lineHeight = 20.sp) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(
+    label: String,
+    value: String,
+) {
+    Row {
+        Text(label, color = K.muted, fontSize = 15.sp, modifier = Modifier.width(130.dp))
+        Text(value, color = K.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+// ---------- Wyszukiwanie ----------
+
+@Composable
+private fun SearchContent(
+    viewModel: HomeViewModel,
+    state: HomeViewModel.HomeState,
+    actions: HomeActions,
+    onDetails: (Game) -> Unit,
+) {
+    val query by viewModel.searchQuery.collectAsState()
+    val results by viewModel.searchResults.collectAsState()
+    val focus = remember { FocusRequester() }
+    DisposableEffect(Unit) {
+        PhonePadText.listener = { text -> viewModel.searchQuery.value = text }
+        onDispose { PhonePadText.listener = null }
+    }
+    LaunchedEffect(Unit) {
+        delay(50)
+        runCatching { focus.requestFocus() }
+    }
+    Column(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, top = 24.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        TopBar("Szukaj", "Wpisz pilotem albo na telefonie (przycisk Klawiatura na padzie w telefonie)", state)
+        OutlinedTextField(
+            value = query,
+            onValueChange = { viewModel.searchQuery.value = it },
+            singleLine = true,
+            label = { Text("Nazwa gry") },
+            colors =
+                OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = K.text,
+                    unfocusedTextColor = K.text,
+                    focusedBorderColor = K.coral,
+                    unfocusedBorderColor = K.line,
+                    focusedLabelColor = K.coral,
+                    unfocusedLabelColor = K.muted,
+                    cursorColor = K.accent,
+                ),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+        )
+        if (query.isNotBlank() && results.isEmpty()) {
+            Text("Nie znaleziono gier pasujących do „$query”.", color = K.muted, fontSize = 15.sp)
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(140.dp),
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+            contentPadding = PaddingValues(6.dp),
+        ) {
+            items(results, key = { it.id }) { game -> GameTile(game, actions, onDetails) }
         }
     }
 }

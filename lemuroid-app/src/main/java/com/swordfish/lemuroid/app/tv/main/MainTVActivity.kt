@@ -43,7 +43,11 @@ import com.swordfish.lemuroid.lib.library.db.entity.Game
 import com.swordfish.lemuroid.retrotv.home.HomeActions
 import com.swordfish.lemuroid.retrotv.home.HomeScreen
 import com.swordfish.lemuroid.retrotv.home.HomeViewModel
+import com.swordfish.lemuroid.retrotv.home.PlayStats
+import com.swordfish.lemuroid.retrotv.roms.RomFiles
 import com.swordfish.lemuroid.retrotv.roms.RomManagerActivity
+import android.net.Uri
+import java.io.File
 import com.swordfish.lemuroid.retrotv.system.TVSystemActivity
 import com.swordfish.lemuroid.retrotv.ui.Palette
 import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
@@ -72,6 +76,7 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
     lateinit var gameInteractor: GameInteractor
 
     private var appliedPalette: Palette? = null
+    private var homeViewModel: HomeViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,9 +87,10 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
         mainViewModel = ViewModelProvider(this, factory).get(MainTVViewModel::class.java)
 
         // Retro TV: nowy ekran główny w Compose zamiast interfejsu Leanback.
-        val homeViewModel =
+        homeViewModel =
             ViewModelProvider(this, HomeViewModel.Factory(retrogradeDb, applicationContext))
                 .get(HomeViewModel::class.java)
+        val homeViewModel = homeViewModel!!
         setContent {
             RetroTvContent {
                 HomeScreen(homeViewModel, busy = false, actions = homeActions)
@@ -102,7 +108,9 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
         RetroTvTheme.apply(this)
         if (appliedPalette != null && appliedPalette != RetroTvTheme.palette) {
             recreate()
+            return
         }
+        homeViewModel?.refreshStats(applicationContext)
     }
 
     private val homeActions =
@@ -118,6 +126,18 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
                     StorageFrameworkPickerLauncher.pickFolder(this@MainTVActivity)
                 } else {
                     TVFolderPickerLauncher.pickFolder(this@MainTVActivity)
+                }
+            }
+
+            override fun deleteGame(game: Game): String {
+                val uri = Uri.parse(game.fileUri)
+                val internal = RomFiles.internalDir(this@MainTVActivity).canonicalPath
+                return if (uri.scheme == "file" && uri.path != null && File(uri.path!!).canonicalPath.startsWith(internal)) {
+                    File(uri.path!!).delete()
+                    LibraryIndexScheduler.scheduleLibrarySync(applicationContext)
+                    "Usunięto plik. Gra zniknie z biblioteki po odświeżeniu."
+                } else {
+                    "Ta gra leży w Twoim folderze (np. na pendrivie lub w pamięci TV). Usuń plik ręcznie albo usuń cały folder w „Gry i ROM-y”."
                 }
             }
 
@@ -149,6 +169,11 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
         when (requestCode) {
             BaseGameActivity.REQUEST_PLAY_GAME -> {
+                if (resultCode == Activity.RESULT_OK && data != null) {
+                    val played = data.getSerializableExtra(BaseGameActivity.PLAY_GAME_RESULT_GAME) as? Game
+                    val duration = data.getLongExtra(BaseGameActivity.PLAY_GAME_RESULT_SESSION_DURATION, 0L)
+                    if (played != null) PlayStats.record(applicationContext, played.id, duration)
+                }
                 GlobalScope.safeLaunch {
                     gameLaunchTaskHandler.handleGameFinish(false, this@MainTVActivity, resultCode, data)
                     ChannelUpdateWork.enqueue(applicationContext)

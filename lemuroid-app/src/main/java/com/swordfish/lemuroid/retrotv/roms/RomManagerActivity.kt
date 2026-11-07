@@ -231,6 +231,36 @@ private fun ListRow(
     }
 }
 
+/** Konsole do filtrowania list gier: kod systemu, nazwa, słowo do wyszukiwania w archive.org. */
+private val consoleFilters =
+    listOf(
+        Triple("nes", "NES", "nes"),
+        Triple("snes", "SNES", "snes"),
+        Triple("gb", "Game Boy", "game boy"),
+        Triple("gbc", "Game Boy Color", "game boy color"),
+        Triple("gba", "GBA", "gba"),
+        Triple("md", "Mega Drive", "genesis"),
+        Triple("sms", "Master System", "master system"),
+        Triple("pce", "PC Engine", "pc engine"),
+    )
+
+/** Rząd przycisków z konsolami (null = wszystkie). */
+@Composable
+private fun ConsoleChips(
+    selected: String?,
+    showAll: Boolean = true,
+    onSelect: (String?) -> Unit,
+) {
+    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (showAll) {
+            item { TvButton(if (selected == null) "✓ Wszystkie" else "Wszystkie", primary = selected == null, onClick = { onSelect(null) }) }
+        }
+        items(consoleFilters) { (id, name, _) ->
+            TvButton(if (selected == id) "✓ $name" else name, primary = selected == id, onClick = { onSelect(id) })
+        }
+    }
+}
+
 private val noPickerMessage =
     "Ten telewizor nie ma systemowego okna wyboru folderów. Skorzystaj z dysku sieciowego albo darmowych gier."
 
@@ -545,6 +575,7 @@ private fun HomebrewSection(
     var items by remember { mutableStateOf<List<HomebrewCatalog.Item>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var installed by remember { mutableStateOf(installedNames(activity)) }
+    var systemFilter by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         try {
             items = HomebrewCatalog.load()
@@ -559,8 +590,18 @@ private fun HomebrewSection(
         val list = items
         if (list == null && error == null) Text("Wczytywanie listy…", color = K.muted, fontSize = 15.sp)
         if (list != null) {
+            val present = list.map { it.system }.toSet()
+            if (present.size > 1) {
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { TvButton(if (systemFilter == null) "✓ Wszystkie" else "Wszystkie", primary = systemFilter == null, onClick = { systemFilter = null }) }
+                    items(consoleFilters.filter { it.first in present }) { (id, name, _) ->
+                        TvButton(if (systemFilter == id) "✓ $name" else name, primary = systemFilter == id, onClick = { systemFilter = id })
+                    }
+                }
+            }
+            val shown = list.filter { systemFilter == null || it.system == systemFilter }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(list) { item ->
+                items(shown) { item ->
                     val have = installed.any { it.startsWith(item.title.lowercase()) } || installed.contains(item.repo)
                     ListRow("${item.title} · ${item.system.uppercase()}", "${item.description}\n${item.author} · licencja ${item.license}") {
                         TvButton(if (have) "Pobrano" else "Pobierz", primary = !have, enabled = !have, onClick = {
@@ -613,6 +654,7 @@ private fun ArchiveSection(
 ) {
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("homebrew nes") }
+    var archiveConsole by remember { mutableStateOf<String?>("nes") }
     var results by remember { mutableStateOf<List<ArchiveSearch.Item>?>(null) }
     var opened by remember { mutableStateOf<ArchiveSearch.Item?>(null) }
     var files by remember { mutableStateOf<List<ArchiveSearch.FileEntry>?>(null) }
@@ -661,6 +703,12 @@ private fun ArchiveSection(
                 modifier = Modifier.weight(1f),
             )
             TvButton("Szukaj", primary = true, onClick = { search() })
+        }
+        ConsoleChips(archiveConsole, showAll = false) { id ->
+            archiveConsole = id
+            val keyword = consoleFilters.firstOrNull { it.first == id }?.third ?: ""
+            query = "homebrew $keyword".trim()
+            search()
         }
         error?.let { Text(it, color = K.coral, fontSize = 15.sp) }
         if (loading) Text("Wczytywanie…", color = K.muted, fontSize = 15.sp)

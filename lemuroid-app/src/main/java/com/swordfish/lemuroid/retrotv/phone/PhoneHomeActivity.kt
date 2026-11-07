@@ -38,6 +38,7 @@ import com.swordfish.lemuroid.retrotv.ui.K
 import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
 import com.swordfish.lemuroid.retrotv.ui.TvButton
+import kotlinx.coroutines.launch
 
 /** Ekran startowy aplikacji na telefonie: pad, wysyłanie gier, gra online. */
 class PhoneHomeActivity : ComponentActivity() {
@@ -102,6 +103,33 @@ class PhoneHomeActivity : ComponentActivity() {
     private fun Screen() {
         var code by remember { mutableStateOf(prefs.getString("code", "") ?: "") }
         var error by remember { mutableStateOf<String?>(null) }
+        var release by remember { mutableStateOf<com.swordfish.lemuroid.retrotv.update.ReleaseInfo?>(null) }
+        var updateStatus by remember { mutableStateOf<String?>(null) }
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            release =
+                runCatching { com.swordfish.lemuroid.retrotv.update.Updater.fetchLatest() }
+                    .getOrNull()?.takeIf { it.isNewerThanInstalled }
+        }
+
+        fun installUpdate(r: com.swordfish.lemuroid.retrotv.update.ReleaseInfo) {
+            val u = com.swordfish.lemuroid.retrotv.update.Updater
+            if (!u.canInstall(this@PhoneHomeActivity)) {
+                updateStatus = "Zezwól Retro TV na instalowanie aplikacji, wróć i naciśnij ponownie."
+                u.openInstallPermissionSettings(this@PhoneHomeActivity)
+                return
+            }
+            updateStatus = "Pobieram…"
+            scope.launch {
+                try {
+                    val apk = u.download(this@PhoneHomeActivity, r) { p -> updateStatus = "Pobieram… ${(p * 100).toInt()}%" }
+                    updateStatus = null
+                    u.install(this@PhoneHomeActivity, apk)
+                } catch (e: Exception) {
+                    updateStatus = "Pobieranie nie powiodło się: ${e.message}"
+                }
+            }
+        }
 
         fun validCode(): String? {
             val c = code.trim().lowercase()
@@ -124,6 +152,10 @@ class PhoneHomeActivity : ComponentActivity() {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text("Retro TV", color = K.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            release?.let { r ->
+                TvButton("Zainstaluj aktualizację ${r.versionName}", primary = true, modifier = Modifier.fillMaxWidth(), onClick = { installUpdate(r) })
+            }
+            updateStatus?.let { Text(it, color = K.muted, fontSize = 14.sp) }
             Text("Telefon jako pad i pilot do Retro TV na telewizorze.", color = K.muted, fontSize = 16.sp)
             TvButton("Zeskanuj kod QR z telewizora", primary = true, modifier = Modifier.fillMaxWidth(), onClick = {
                 scanQr { error = it }
@@ -172,6 +204,11 @@ class PhoneHomeActivity : ComponentActivity() {
             TvButton("Emulator na tym telefonie", modifier = Modifier.fillMaxWidth(), onClick = {
                 startActivity(Intent(this@PhoneHomeActivity, MainActivity::class.java).putExtra(EXTRA_PHONE_EMULATOR, true))
             })
+            Text(
+                "Wersja ${com.swordfish.lemuroid.BuildConfig.VERSION_NAME}" + if (release == null) " · aktualna" else "",
+                color = K.muted,
+                fontSize = 13.sp,
+            )
         }
     }
 }

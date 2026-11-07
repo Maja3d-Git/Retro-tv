@@ -399,6 +399,9 @@ abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
     override fun onDestroy() {
         if (!isChangingConfigurations) {
             GameService.requestTermination()
+            // Retro TV: koniec gry zamyka pokój gry przez internet.
+            com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.inputSink = null
+            com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.stop(applicationContext)
         }
         super.onDestroy()
     }
@@ -409,7 +412,27 @@ abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
         data: Intent?,
     ) {
         super.onActivityResult(requestCode, resultCode, data)
+        // Retro TV: gra przez internet.
+        if (requestCode == NETPLAY_PROJECTION_REQUEST) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.firstGuestPlayer =
+                    com.swordfish.lemuroid.retrotv.pad.PhonePadServer.phones.value.size + 1
+                com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.inputSink = padSink()
+                com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.start(applicationContext, data, game.displayName())
+                displayToast("Tworzę pokój – kod zobaczysz w menu gry")
+            } else {
+                displayToast("Bez zgody na przechwytywanie obrazu nie da się grać przez internet")
+            }
+            return
+        }
         if (requestCode == DIALOG_REQUEST) {
+            when (data?.getStringExtra(RETROTV_NETPLAY)) {
+                "start" -> {
+                    val manager = getSystemService(android.media.projection.MediaProjectionManager::class.java)
+                    startActivityForResult(manager.createScreenCaptureIntent(), NETPLAY_PROJECTION_REQUEST)
+                }
+                "stop" -> com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.stop(applicationContext)
+            }
             Timber.i("Game menu dialog response: ${data?.extras.dump()}")
             if (data?.getBooleanExtra(GameMenuContract.RESULT_RESET, false) == true) {
                 GlobalScope.launch {
@@ -464,6 +487,8 @@ abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
 
     companion object {
         const val DIALOG_REQUEST = 100
+        const val NETPLAY_PROJECTION_REQUEST = 4711
+        const val RETROTV_NETPLAY = "RETROTV_NETPLAY"
 
         private const val EXTRA_GAME = "GAME"
         private const val EXTRA_LOAD_SAVE = "LOAD_SAVE"

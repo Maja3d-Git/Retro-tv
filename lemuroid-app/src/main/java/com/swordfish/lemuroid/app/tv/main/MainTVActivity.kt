@@ -146,6 +146,10 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
                 }
             }
 
+            override fun joinOnline() {
+                startActivity(Intent(this@MainTVActivity, com.swordfish.lemuroid.retrotv.netplay.NetplayGuestActivity::class.java))
+            }
+
             override fun openRomManager() {
                 startActivity(Intent(this@MainTVActivity, RomManagerActivity::class.java))
             }

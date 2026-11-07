@@ -101,6 +101,8 @@ interface HomeActions {
 
     fun openSystem()
 
+    fun joinOnline()
+
     /** Usuwa plik gry; zwraca komunikat dla użytkownika. */
     fun deleteGame(game: Game): String
 }
@@ -189,6 +191,7 @@ private fun Rail(
         com.swordfish.lemuroid.retrotv.ui.RailHeader(null)
         RailItem("Start", screen == Screen.Start) { onOpen(Screen.Start) }
         RailItem("Szukaj", screen == Screen.Search) { onOpen(Screen.Search) }
+        RailItem("Dołącz do gry", false, onClick = actions::joinOnline)
 
         if (state.systems.isNotEmpty()) {
             RailLabel("KONSOLE")

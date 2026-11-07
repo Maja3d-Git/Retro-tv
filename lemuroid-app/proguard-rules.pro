@@ -95,3 +95,9 @@
 -dontwarn org.ietf.jgss.**
 -dontwarn org.bouncycastle.**
 -keep class org.bouncycastle.** { *; }
+
+## Retro TV: gra przez internet (WebRTC, MQTT)
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
+-keep class org.eclipse.paho.client.mqttv3.** { *; }
+-dontwarn org.eclipse.paho.client.mqttv3.**

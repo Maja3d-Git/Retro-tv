@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -119,7 +120,7 @@ class RetroGameMenuActivity : ImmersiveActivity() {
         }
     }
 
-    private enum class Page { MAIN, SAVE, LOAD, DISK }
+    private enum class Page { MAIN, SAVE, LOAD, DISK, NETPLAY }
 
     @Composable
     private fun MenuScreen(
@@ -128,6 +129,7 @@ class RetroGameMenuActivity : ImmersiveActivity() {
     ) {
         var page by remember { mutableStateOf(Page.MAIN) }
         var slots by remember { mutableStateOf<List<Pair<SaveInfo, Bitmap?>>>(emptyList()) }
+        val netplay by com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.state.collectAsState()
         LaunchedEffect(Unit) { slots = loadSlots(game, core) }
         BackHandler { if (page == Page.MAIN) finishWith {} else page = Page.MAIN }
 
@@ -178,6 +180,13 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                         }
                         if (disks > 1) MenuItem("Zmień płytę", "płyta ${currentDisk + 1} z $disks") { page = Page.DISK }
                         MenuItem("Zacznij od nowa") { finishWith { putExtra(GameMenuContract.RESULT_RESET, true) } }
+                        if (netplay.active) {
+                            MenuItem("Pokój ${netplay.code}", "goście: ${netplay.guests.count { it.connected }}") { page = Page.NETPLAY }
+                        } else {
+                            MenuItem("Graj przez internet", "utwórz pokój z kodem") {
+                                finishWith { putExtra(com.swordfish.lemuroid.app.shared.game.BaseGameActivity.RETROTV_NETPLAY, "start") }
+                            }
+                        }
                         MenuItem("Więcej opcji emulatora", "filtry, sterowanie, rdzeń") { openLegacyMenu() }
                         Spacer(Modifier.height(8.dp))
                         MenuItem("Wyjdź do biblioteki", danger = true) { finishWith { putExtra(GameMenuContract.RESULT_QUIT, true) } }
@@ -194,6 +203,34 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                             }
                         }
                         MenuItem("Wróć") { page = Page.MAIN }
+                    }
+                    Page.NETPLAY -> {
+                        Text("Gra przez internet", color = K.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+                        Text("KOD POKOJU", color = K.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                        Text(netplay.code, color = K.text, fontSize = 40.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 4.sp)
+                        Text(
+                            if (netplay.online) "Pokój jest otwarty." else "Łączenie z serwerem…",
+                            color = if (netplay.online) K.ok else K.muted,
+                            fontSize = 14.sp,
+                        )
+                        Text(
+                            "Goście wpisują kod w aplikacji Retro TV (Dołącz do gry) albo na stronie:\n${com.swordfish.lemuroid.retrotv.netplay.Netplay.WEB_URL}",
+                            color = K.muted,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                        )
+                        if (netplay.guests.isEmpty()) {
+                            Text("Czekam na gości…", color = K.muted, fontSize = 14.sp)
+                        } else {
+                            netplay.guests.forEach { g ->
+                                Text("${g.name}: ${if (g.connected) "połączony" else "łączy się…"}", color = if (g.connected) K.ok else K.muted, fontSize = 14.sp)
+                            }
+                        }
+                        Text("Dźwięk gry słyszą tylko osoby przy tym telewizorze.", color = K.muted, fontSize = 12.sp)
+                        MenuItem("Wróć do gry", modifier = Modifier.focusRequester(first)) { finishWith {} }
+                        MenuItem("Zamknij pokój", danger = true) {
+                            finishWith { putExtra(com.swordfish.lemuroid.app.shared.game.BaseGameActivity.RETROTV_NETPLAY, "stop") }
+                        }
                     }
                     Page.DISK -> {
                         Text("Zmień płytę", color = K.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)

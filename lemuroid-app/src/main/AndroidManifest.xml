@@ -27,6 +27,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
@@ -138,6 +140,17 @@
             android:name=".app.tv.game.TVGameActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|fontScale|fontWeightAdjustment|keyboard|layoutDirection|locale|mcc|navigation|smallestScreenSize|touchscreen|uiMode"
             android:process=":game"
+            android:theme="@style/LemuroidMaterialTheme.Game" />
+
+        <service
+            android:name="com.swordfish.lemuroid.retrotv.netplay.NetplayHostService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"
+            android:process=":game" />
+
+        <activity
+            android:name="com.swordfish.lemuroid.retrotv.netplay.NetplayGuestActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation"
             android:theme="@style/LemuroidMaterialTheme.Game" />
 
         <activity

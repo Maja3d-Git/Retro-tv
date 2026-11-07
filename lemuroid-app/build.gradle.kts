@@ -226,6 +226,8 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("org.java-websocket:Java-WebSocket:1.5.7")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
 
     implementation(deps.libs.composeSettings.uiTiles)
     implementation(deps.libs.composeSettings.uiTilesExtended)

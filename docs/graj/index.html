@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1C1C21">
+<title>Retro TV – dołącz do gry</title>
+<style>
+:root{--bg:#1C1C21;--card:#2F2F36;--btn:#3A3A42;--line:#4A4A55;--text:#ECEAE5;--muted:#A8A5B2;--accent:#8E80F0;--coral:#FF7A70;--ok:#6BD39A}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+#join{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
+.card{width:min(460px,100%);background:var(--card);border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:14px}
+h1{margin:0;font-size:26px}
+p{margin:0;color:var(--muted);line-height:1.45}
+input{height:56px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--text);font-size:28px;letter-spacing:.3em;text-align:center;text-transform:uppercase;font-weight:700}
+input:focus{outline:none;border-color:var(--coral)}
+button{border:0;border-radius:24px;height:48px;font:600 16px inherit;background:var(--btn);color:var(--text);cursor:pointer}
+button.pri{background:var(--accent);color:#140F33}
+button:disabled{opacity:.5}
+.app{background:var(--bg);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.app a{color:var(--accent);font-weight:600}
+#status{min-height:1.4em}
+#game{position:fixed;inset:0;display:none}
+video{width:100%;height:100%;object-fit:contain;background:#000}
+.pad{position:fixed;inset:0;pointer-events:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.pad *{pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none}
+.dpad{position:relative;width:150px;height:150px;opacity:.75}
+.dpad b{position:absolute;width:33.4%;height:33.4%;background:rgba(58,58,66,.85);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.dpad .u{left:33.3%;top:0}.dpad .d{left:33.3%;bottom:0}.dpad .l{left:0;top:33.3%}.dpad .r{right:0;top:33.3%}
+.dpad b.on{background:var(--accent);color:#fff}
+.mid{display:flex;gap:10px;margin-bottom:10px}
+.mid button{height:32px;width:74px;font-size:11px;letter-spacing:.1em;opacity:.8}
+.face{position:relative;width:170px;height:170px;opacity:.8}
+.face button{position:absolute;width:34%;height:34%;border-radius:50%;font-size:20px;background:rgba(58,58,66,.85)}
+.face button.on,.mid button.on,.sh button.on{background:var(--coral);color:#1A0F08}
+.sh{position:fixed;top:max(10px,env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:space-between;padding:0 16px;pointer-events:none}
+.sh button{pointer-events:auto;width:110px;height:40px;opacity:.8;background:rgba(58,58,66,.85)}
+#info{position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:13px;color:var(--muted);background:rgba(0,0,0,.5);padding:4px 10px;border-radius:10px}
+@media (hover:hover) and (pointer:fine){.pad,.sh{display:none}}
+</style>
+</head>
+<body>
+<div id="join">
+  <div class="card">
+    <h1>Dołącz do gry</h1>
+    <p>Wpisz kod pokoju, który gospodarz widzi w menu gry w Retro TV.</p>
+    <input id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KOD">
+    <button class="pri" id="go">Dołącz</button>
+    <p id="status"></p>
+    <div class="app">
+      <strong>Masz Android TV albo telefon z Androidem?</strong>
+      <p>W aplikacji Retro TV gra działa najlepiej: wybierz „Dołącz do gry” i wpisz ten sam kod.</p>
+      <a href="https://github.com/Maja3d-Git/retro-tv/releases/latest/download/retro-tv.apk">Pobierz Retro TV (APK)</a>
+    </div>
+    <p style="font-size:13px">Na komputerze grasz klawiaturą (strzałki, Z X A S, Enter, Shift) albo padem.</p>
+  </div>
+</div>
+<div id="game">
+  <video id="video" autoplay playsinline muted></video>
+  <div id="info"></div>
+  <div class="sh"><button data-k="102">L</button><button data-k="103">R</button></div>
+  <div class="pad">
+    <div class="dpad" id="dpad"><b class="u">▲</b><b class="d">▼</b><b class="l">◀</b><b class="r">▶</b></div>
+    <div class="mid"><button data-k="109">SELECT</button><button data-k="108">START</button></div>
+    <div class="face">
+      <button data-k="99" style="left:33%;top:0">X</button>
+      <button data-k="100" style="left:0;top:33%">Y</button>
+      <button data-k="96" style="left:66%;top:33%">A</button>
+      <button data-k="97" style="left:33%;top:66%">B</button>
+    </div>
+  </div>
+</div>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+(function(){
+const BROKER="wss://broker.hivemq.com:8884/mqtt";
+const ICE=[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}];
+const id=Math.random().toString(36).slice(2,12);
+const $=s=>document.querySelector(s);
+const params=new URLSearchParams(location.search);
+if(params.get("kod"))$("#code").value=params.get("kod").toUpperCase();
+let client=null,pc=null,dc=null,code="";
+function status(t){$("#status").textContent=t}
+function send(o){if(dc&&dc.readyState==="open")dc.send(JSON.stringify(o))}
+function key(c,d){send({t:"k",c:c,d:d?1:0})}
+$("#go").onclick=()=>{
+  code=$("#code").value.trim().toUpperCase();
+  if(code.length!==6){status("Kod ma 6 znaków.");return}
+  $("#go").disabled=true;status("Łączenie z pokojem "+code+"…");
+  client=mqtt.connect(BROKER,{clientId:"retrotv-web-"+id,clean:true,connectTimeout:15000});
+  client.on("connect",()=>{
+    client.subscribe("retrotv/v1/"+code+"/guest/"+id,{qos:1});
+    client.publish("retrotv/v1/"+code+"/host",JSON.stringify({type:"join",from:id,name:"Przeglądarka"}),{qos:1});
+    status("Czekam na odpowiedź gospodarza…");
+    setTimeout(()=>{if(!pc){status("Brak odpowiedzi. Sprawdź kod i czy gospodarz ma otwarty pokój.");$("#go").disabled=false}},15000);
+  });
+  client.on("error",()=>{status("Nie udało się połączyć z serwerem.");$("#go").disabled=false});
+  client.on("message",(t,m)=>{let j;try{j=JSON.parse(m.toString())}catch(e){return}
+    if(j.type==="offer")onOffer(j);
+    else if(j.type==="full"){status("Pokój jest pełny.");$("#go").disabled=false}
+    else if(j.type==="bye"){alert("Gospodarz zamknął pokój.");location.reload()}});
+};
+async function onOffer(j){
+  pc=new RTCPeerConnection({iceServers:ICE});
+  pc.ontrack=e=>{const v=$("#video");v.srcObject=e.streams[0]||new MediaStream([e.track]);v.play().catch(()=>{})};
+  pc.ondatachannel=e=>{dc=e.channel};
+  pc.oniceconnectionstatechange=()=>{const s=pc.iceConnectionState;
+    if(s==="connected"||s==="completed"){$("#join").style.display="none";$("#game").style.display="block";$("#info").textContent="Pokój "+code+" · gracz "+(j.player||"?")}
+    if(s==="failed"){status("Nie udało się połączyć (sieć może blokować połączenia bezpośrednie).");$("#go").disabled=false}};
+  await pc.setRemoteDescription({type:"offer",sdp:j.sdp});
+  await pc.setLocalDescription(await pc.createAnswer());
+  await new Promise(r=>{if(pc.iceGatheringState==="complete")return r();pc.onicegatheringstatechange=()=>{if(pc.iceGatheringState==="complete")r()};setTimeout(r,4000)});
+  client.publish("retrotv/v1/"+code+"/host",JSON.stringify({type:"answer",from:id,sdp:pc.localDescription.sdp}),{qos:1});
+  status("Łączenie z grą…");
+}
+window.addEventListener("beforeunload",()=>{if(client&&code)client.publish("retrotv/v1/"+code+"/host",JSON.stringify({type:"bye",from:id}))});
+// Dotyk
+document.querySelectorAll("[data-k]").forEach(b=>{const c=+b.dataset.k;
+  b.addEventListener("pointerdown",e=>{e.preventDefault();b.classList.add("on");key(c,true);navigator.vibrate&&navigator.vibrate(10)});
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,()=>{if(b.classList.contains("on")){b.classList.remove("on");key(c,false)}}))});
+const dp=$("#dpad");let pid=null,cur="0,0";
+function dpad(x,y){const k=x+","+y;if(k===cur)return;cur=k;send({t:"m",s:"dpad",x:x,y:y});
+  dp.querySelector(".u").classList.toggle("on",y<0);dp.querySelector(".d").classList.toggle("on",y>0);dp.querySelector(".l").classList.toggle("on",x<0);dp.querySelector(".r").classList.toggle("on",x>0)}
+function dpos(e){const r=dp.getBoundingClientRect();const x=(e.clientX-r.left)/r.width*2-1,y=(e.clientY-r.top)/r.height*2-1;dpad(x<-.35?-1:x>.35?1:0,y<-.35?-1:y>.35?1:0)}
+dp.addEventListener("pointerdown",e=>{e.preventDefault();pid=e.pointerId;dp.setPointerCapture(pid);dpos(e)});
+dp.addEventListener("pointermove",e=>{if(e.pointerId===pid)dpos(e)});
+["pointerup","pointercancel"].forEach(ev=>dp.addEventListener(ev,e=>{if(e.pointerId===pid){pid=null;dpad(0,0)}}));
+// Klawiatura
+const KM={KeyZ:97,KeyX:96,KeyA:100,KeyS:99,KeyQ:102,KeyW:103,Enter:108,ShiftLeft:109,ShiftRight:109};
+const dirs=new Set();
+function kdir(){dpad(dirs.has("ArrowLeft")?-1:dirs.has("ArrowRight")?1:0,dirs.has("ArrowUp")?-1:dirs.has("ArrowDown")?1:0)}
+addEventListener("keydown",e=>{if($("#game").style.display!=="block")return;if(e.repeat)return;
+  if(e.code.startsWith("Arrow")){dirs.add(e.code);kdir();e.preventDefault()}else if(KM[e.code]){key(KM[e.code],true);e.preventDefault()}});
+addEventListener("keyup",e=>{if(e.code.startsWith("Arrow")){dirs.delete(e.code);kdir()}else if(KM[e.code])key(KM[e.code],false)});
+// Pad (Gamepad API)
+const GB=[96,97,100,99,102,103,104,105,109,108];let prev=[];
+function poll(){const g=navigator.getGamepads&&navigator.getGamepads()[0];
+  if(g){g.buttons.slice(0,10).forEach((b,i)=>{const p=b.pressed;if(p!==prev[i]){prev[i]=p;key(GB[i],p)}});
+    const x=(g.buttons[14]&&g.buttons[14].pressed)?-1:(g.buttons[15]&&g.buttons[15].pressed)?1:0;
+    const y=(g.buttons[12]&&g.buttons[12].pressed)?-1:(g.buttons[13]&&g.buttons[13].pressed)?1:0;
+    if(!dirs.size)dpad(x,y);
+    send({t:"m",s:"left",x:+g.axes[0].toFixed(2),y:+g.axes[1].toFixed(2)})}
+  requestAnimationFrame(poll)}
+requestAnimationFrame(poll);
+})();
+</script>
+</body>
+</html>

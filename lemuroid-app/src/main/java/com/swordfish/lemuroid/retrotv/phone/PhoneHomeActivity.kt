@@ -87,7 +87,8 @@ class PhoneHomeActivity : ComponentActivity() {
                 .setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.QR_CODE)
                 .setPrompt("Zeskanuj kod QR z ekranu Kontrolery na telewizorze")
                 .setBeepEnabled(false)
-                .setOrientationLocked(false)
+                .setOrientationLocked(true)
+                .setCaptureActivity(PortraitCaptureActivity::class.java)
         runCatching { qrScanner.launch(options) }.onFailure { onError("Nie udało się uruchomić aparatu – wpisz kod ręcznie.") }
     }
 

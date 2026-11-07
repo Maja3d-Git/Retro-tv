@@ -265,3 +265,31 @@ object HomebrewCatalog {
         return response.body?.byteStream() ?: throw IOException("Pusta odpowiedź")
     }
 }
+
+/** Pobieranie pliku gry z dowolnego linku (np. strona autora, itch.io, archive.org). */
+object LinkDownload {
+    private val client by lazy {
+        OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(120, TimeUnit.SECONDS).followRedirects(true).build()
+    }
+
+    data class Target(val name: String, val size: Long, val response: okhttp3.Response)
+
+    suspend fun open(url: String): Target =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(url.trim()).header("User-Agent", "RetroTV-Android").build()
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                response.close()
+                throw IOException("Serwer odpowiedział kodem ${response.code}")
+            }
+            val disposition = response.header("Content-Disposition").orEmpty()
+            val fromHeader = Regex("""filename\*?=(?:UTF-8'')?"?([^";]+)"?""").find(disposition)?.groupValues?.get(1)
+            val fromUrl = response.request.url.pathSegments.lastOrNull { it.isNotBlank() }
+            val name = java.net.URLDecoder.decode(fromHeader ?: fromUrl ?: "gra", "UTF-8")
+            if (!RomFiles.isRom(name)) {
+                response.close()
+                throw IOException("„$name” nie wygląda na plik gry (obsługiwane m.in. .nes, .sfc, .gba, .zip)")
+            }
+            Target(name, response.body?.contentLength() ?: -1L, response)
+        }
+}

@@ -57,11 +57,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
+import com.swordfish.lemuroid.lib.library.metaSystemID
 import com.swordfish.lemuroid.app.shared.systems.MetaSystemInfo
 import com.swordfish.lemuroid.lib.library.GameSystem
 import com.swordfish.lemuroid.lib.library.MetaSystemID
 import com.swordfish.lemuroid.lib.library.db.entity.Game
+import com.swordfish.lemuroid.retrotv.pad.PadDetector
 import com.swordfish.lemuroid.retrotv.pad.PhonePadServer
 import com.swordfish.lemuroid.retrotv.ui.K
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
@@ -179,11 +184,7 @@ private fun Rail(
             .padding(horizontal = 12.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(Modifier.padding(start = 10.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            PadLogo(Modifier.size(30.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("RETRO TV", color = K.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
-        }
+        com.swordfish.lemuroid.retrotv.ui.RailHeader(null)
         RailItem("Start", screen == Screen.Start) { onOpen(Screen.Start) }
         RailItem("Szukaj", screen == Screen.Search) { onOpen(Screen.Search) }
 
@@ -338,12 +339,7 @@ private fun Chip(
     }
 }
 
-private fun countPads(): Int =
-    InputDevice.getDeviceIds().toList()
-        .mapNotNull { InputDevice.getDevice(it) }
-        .filter { !it.isVirtual && (it.sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD) }
-        .distinctBy { it.descriptor }
-        .size
+private fun countPads(): Int = PadDetector.pads().size
 
 // ---------- Start ----------
 
@@ -507,18 +503,27 @@ private fun ConsoleCard(
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
-    Column(
+    Row(
         modifier
-            .height(70.dp)
+            .height(78.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(K.card)
             .border(3.dp, if (focused) K.coral else K.line.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
             .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(info.getName(context), color = K.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(gamesCount(info.count), color = K.muted, fontSize = 13.sp)
+        Image(
+            painter = painterResource(info.metaSystem.imageResId),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(K.text),
+            modifier = Modifier.size(54.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(info.getName(context), color = K.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(gamesCount(info.count), color = K.muted, fontSize = 13.sp)
+        }
     }
 }
 
@@ -656,7 +661,16 @@ private fun Cover(
     titleSize: Int,
 ) {
     val tile = K.p.tiles[abs(game.title.hashCode()) % K.p.tiles.size]
+    val systemIcon = remember(game.systemId) { runCatching { GameSystem.findById(game.systemId).metaSystemID().imageResId }.getOrNull() }
     Box(modifier.background(tile), contentAlignment = Alignment.BottomStart) {
+        if (systemIcon != null) {
+            Image(
+                painter = painterResource(systemIcon),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.28f)),
+                modifier = Modifier.align(Alignment.Center).fillMaxSize(0.8f),
+            )
+        }
         Text(
             game.displayName(),
             color = Color.White,

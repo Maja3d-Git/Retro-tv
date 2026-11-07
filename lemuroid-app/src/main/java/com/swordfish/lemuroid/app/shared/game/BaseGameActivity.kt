@@ -159,12 +159,7 @@ abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
 
     // Retro TV: przyciski z telefonów trafiają do kolejnych portów po fizycznych padach.
     override fun padSink(): PadSink {
-        val physicalPads =
-            InputDevice.getDeviceIds().toList()
-                .mapNotNull { InputDevice.getDevice(it) }
-                .filter { !it.isVirtual && (it.sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD) }
-                .distinctBy { it.descriptor }
-                .size
+        val physicalPads = com.swordfish.lemuroid.retrotv.pad.PadDetector.pads().size
         return object : PadSink {
             override val mode = "game"
             override val layout = PadLayouts.forSystem(game.systemId)

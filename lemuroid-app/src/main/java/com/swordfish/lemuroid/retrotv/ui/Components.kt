@@ -96,7 +96,7 @@ fun TvButton(
                 .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+        Text(text, color = fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
     }
 }
 
@@ -119,7 +119,7 @@ fun TvToggle(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = K.text, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Text(label, color = K.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Box(
             modifier =
                 Modifier
@@ -169,8 +169,8 @@ fun SectionTitle(
     subtitle: String? = null,
 ) {
     Column(Modifier.padding(bottom = 14.dp)) {
-        Text(title, color = K.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
-        if (subtitle != null) Text(subtitle, color = K.muted, fontSize = 15.sp)
+        Text(title, color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+        if (subtitle != null) Text(subtitle, color = K.muted, fontSize = 14.sp)
     }
 }
 
@@ -213,6 +213,19 @@ fun TvChoice(
             }
         }
         Spacer(Modifier.width(14.dp))
-        Text(label, color = K.text, fontSize = 16.sp)
+        Text(label, color = K.text, fontSize = 15.sp)
+    }
+}
+
+/** Nagłówek menu bocznego: logo i nazwa, wspólny dla wszystkich ekranów. */
+@Composable
+fun RailHeader(subtitle: String?) {
+    Row(Modifier.padding(start = 10.dp, bottom = if (subtitle == null) 18.dp else 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        com.swordfish.lemuroid.retrotv.home.PadLogo(Modifier.size(30.dp))
+        Spacer(Modifier.width(10.dp))
+        Text("RETRO TV", color = K.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+    }
+    if (subtitle != null) {
+        Text(subtitle, color = K.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 50.dp, bottom = 18.dp))
     }
 }

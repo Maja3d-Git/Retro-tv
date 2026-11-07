@@ -17,6 +17,8 @@ data class NetworkInfo(
     val type: String,
     val internetValidated: Boolean,
     val ipAddress: String?,
+    /** Nazwa sieci Wi-Fi; null gdy brak zgody na lokalizację albo to nie Wi-Fi. */
+    val ssid: String? = null,
 )
 
 data class ServiceCheck(val name: String, val ok: Boolean, val detail: String)
@@ -50,7 +52,21 @@ object SystemStatus {
                 ?.map { it.address }
                 ?.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }
                 ?.hostAddress
-        return NetworkInfo(true, type, validated, ip)
+        val ssid = if (type == "Wi-Fi") wifiName(context) else null
+        return NetworkInfo(true, type, validated, ip, ssid)
+    }
+
+    fun hasLocationPermission(context: Context): Boolean =
+        context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    @Suppress("DEPRECATION")
+    private fun wifiName(context: Context): String? {
+        if (!hasLocationPermission(context)) return null
+        val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager ?: return null
+        val raw = runCatching { wifi.connectionInfo?.ssid }.getOrNull() ?: return null
+        val name = raw.removeSurrounding("\"")
+        return name.takeIf { it.isNotBlank() && it != "<unknown ssid>" }
     }
 
     /** Sprawdza, czy odpowiadają serwery, z których korzysta aplikacja. */
@@ -84,17 +100,7 @@ object SystemStatus {
     }
 
     fun controllers(): List<Controller> {
-        return InputDevice.getDeviceIds().toList()
-            .mapNotNull { InputDevice.getDevice(it) }
-            .filter { device ->
-                val sources = device.sources
-                !device.isVirtual &&
-                    (
-                        sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
-                            sources and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
-                    )
-            }
-            .distinctBy { it.descriptor }
+        return com.swordfish.lemuroid.retrotv.pad.PadDetector.pads()
             .map { device ->
                 val details = mutableListOf<String>()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

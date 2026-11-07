@@ -68,6 +68,7 @@ import timber.log.Timber
 import java.io.File
 
 import com.swordfish.lemuroid.retrotv.ui.InfoRow
+import com.swordfish.lemuroid.retrotv.ui.RailHeader
 import com.swordfish.lemuroid.retrotv.ui.K
 import com.swordfish.lemuroid.retrotv.ui.Panel
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
@@ -134,18 +135,10 @@ private fun SystemScreen(
                 .width(220.dp)
                 .fillMaxHeight()
                 .background(K.nav)
-                .padding(horizontal = 16.dp, vertical = 28.dp),
+                .padding(horizontal = 12.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                "RETRO TV",
-                color = K.text,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = RetroTvTheme.display,
-                modifier = Modifier.padding(start = 12.dp, bottom = 4.dp),
-            )
-            Text("System", color = K.muted, fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp, bottom = 20.dp))
+            RailHeader("System")
             Section.values().forEachIndexed { index, s ->
                 val source = remember { MutableInteractionSource() }
                 val focused by source.collectIsFocusedAsState()
@@ -153,21 +146,21 @@ private fun SystemScreen(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(42.dp)
                         .then(if (s == initial) Modifier.focusRequester(firstTab) else Modifier)
                         .onFocusChanged { if (it.isFocused) section = s }
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(if (selected) K.p.activeBg else Color.Transparent)
-                        .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+                        .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(10.dp))
                         .clickable(interactionSource = source, indication = null) { section = s }
                         .padding(horizontal = 14.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     Text(
                         s.title,
-                        color = if (selected) K.p.activeFg else K.muted,
-                        fontSize = 16.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selected) K.p.activeFg else K.text,
+                        fontSize = 15.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     )
                 }
             }
@@ -439,6 +432,10 @@ private fun NetworkSection() {
         scope.launch { services = SystemStatus.checkServices() }
     }
     LaunchedEffect(Unit) { refresh() }
+    val locationPermission =
+        androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+        ) { refresh() }
 
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SectionTitle("Połączenie", "Stan sieci i serwerów, z których korzysta aplikacja")
@@ -453,6 +450,13 @@ private fun NetworkSection() {
                 if (network.internetValidated) "Działa" else "Brak dostępu do internetu",
                 if (network.internetValidated) K.ok else K.coral,
             )
+            if (network.type == "Wi-Fi") {
+                InfoRow(
+                    "Nazwa sieci Wi-Fi",
+                    network.ssid ?: if (SystemStatus.hasLocationPermission(context)) "nieznana" else "wymaga zgody na lokalizację",
+                    if (network.ssid != null) K.text else K.muted,
+                )
+            }
             InfoRow("Adres IP telewizora", network.ipAddress ?: "—")
         }
         Panel {
@@ -466,7 +470,17 @@ private fun NetworkSection() {
                 }
             }
         }
-        Row { TvButton("Sprawdź ponownie", onClick = { refresh() }) }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Sprawdź ponownie", onClick = { refresh() })
+            if (network.type == "Wi-Fi" && !SystemStatus.hasLocationPermission(context)) {
+                TvButton("Pokaż nazwę sieci", onClick = { locationPermission.launch(android.Manifest.permission.ACCESS_FINE_LOCATION) })
+            }
+        }
+        Text(
+            "Android udostępnia nazwę sieci Wi-Fi tylko po zgodzie na lokalizację. Retro TV nie zbiera ani nie wysyła Twojej lokalizacji.",
+            color = K.muted,
+            fontSize = 13.sp,
+        )
     }
 }
 
@@ -529,6 +543,8 @@ private fun ControllersSection() {
             if (ip != null) {
                 val url = PhonePadServer.pairingUrl(context, ip)
                 QrImage(url, Modifier.size(180.dp))
+                val ssid = remember { SystemStatus.network(context).ssid }
+                if (ssid != null) Text("Sieć: $ssid", color = K.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Zeskanuj aparatem telefonu w tej samej sieci Wi-Fi i obróć telefon poziomo.",
                     color = K.muted,

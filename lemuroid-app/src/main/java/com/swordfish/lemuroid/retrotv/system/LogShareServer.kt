@@ -53,6 +53,10 @@ class LogShareServer(private val context: Context) {
                         c.soTimeout = 5000
                         val reader = BufferedReader(InputStreamReader(c.getInputStream()))
                         val requestLine = reader.readLine() ?: return@use
+                        while (true) {
+                            val line = reader.readLine() ?: break
+                            if (line.isEmpty()) break
+                        }
                         val path = requestLine.split(" ").getOrNull(1) ?: "/"
                         val ok = path.startsWith("/logs") && path.contains("t=$token")
                         val body =
@@ -74,6 +78,8 @@ class LogShareServer(private val context: Context) {
                             write(body)
                             flush()
                         }
+                        c.shutdownOutput()
+                        runCatching { while (c.getInputStream().read() >= 0) { } }
                         if (ok) Timber.i("Dziennik pobrany przez %s", c.inetAddress.hostAddress)
                     }
                 } catch (e: SocketException) {

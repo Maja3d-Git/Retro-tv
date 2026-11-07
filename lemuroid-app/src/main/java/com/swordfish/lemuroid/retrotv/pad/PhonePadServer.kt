@@ -99,11 +99,11 @@ object PhonePadServer {
     ) {
         appContext = context.applicationContext
         sink = newSink
+        if (httpSocket == null) startHttp()
         if (wsServer != null) {
             broadcastWelcome()
             return
         }
-        startHttp()
         startWebSocket(attempt = 0)
     }
 
@@ -142,7 +142,7 @@ object PhonePadServer {
         }
     }
 
-    private fun startHttp() {
+    private fun startHttp(attempt: Int = 0) {
         val server =
             try {
                 ServerSocket().apply {
@@ -150,39 +150,66 @@ object PhonePadServer {
                     bind(InetSocketAddress(HTTP_PORT))
                 }
             } catch (e: Exception) {
-                Timber.w(e, "Port %d zajęty – strona pada niedostępna", HTTP_PORT)
+                // Port bywa jeszcze zajęty przez drugi proces (menu ↔ gra) – próbujemy ponownie.
+                if (attempt < 12) {
+                    main.postDelayed({ if (wsServer != null || sink != null) startHttp(attempt + 1) }, 400)
+                } else {
+                    Timber.w(e, "Port %d zajęty – strona pada niedostępna", HTTP_PORT)
+                }
                 return
             }
         httpSocket = server
+        val page =
+            runCatching { appContext.assets.open("retrotv_pad/index.html").readBytes() }
+                .getOrElse { "Brak strony pada".toByteArray() }
         thread(name = "retrotv-pad-http", isDaemon = true) {
-            val page =
-                runCatching { appContext.assets.open("retrotv_pad/index.html").readBytes() }
-                    .getOrElse { "Brak strony pada".toByteArray() }
             while (!server.isClosed) {
-                try {
-                    server.accept().use { c ->
-                        c.soTimeout = 5000
-                        val reader = BufferedReader(InputStreamReader(c.getInputStream()))
-                        val request = reader.readLine() ?: return@use
-                        val notFound = request.contains("favicon")
-                        val body = if (notFound) ByteArray(0) else page
-                        val header =
-                            (if (notFound) "HTTP/1.1 404 Not Found\r\n" else "HTTP/1.1 200 OK\r\n") +
-                                "Content-Type: text/html; charset=utf-8\r\n" +
-                                "Cache-Control: no-store\r\n" +
-                                "Content-Length: ${body.size}\r\nConnection: close\r\n\r\n"
-                        c.getOutputStream().apply {
-                            write(header.toByteArray())
-                            write(body)
-                            flush()
-                        }
+                val client =
+                    try {
+                        server.accept()
+                    } catch (e: SocketException) {
+                        break
+                    } catch (e: Exception) {
+                        continue
                     }
-                } catch (e: SocketException) {
-                    break
-                } catch (e: Exception) {
-                    Timber.w(e, "Błąd strony pada")
-                }
+                // Każde połączenie osobno: przeglądarki otwierają zapasowe połączenia, które nic nie wysyłają.
+                thread(isDaemon = true) { serveHttp(client, page) }
             }
+        }
+    }
+
+    private fun serveHttp(
+        client: java.net.Socket,
+        page: ByteArray,
+    ) {
+        try {
+            client.use { c ->
+                c.soTimeout = 10_000
+                val reader = BufferedReader(InputStreamReader(c.getInputStream()))
+                val request = reader.readLine() ?: return
+                // Wczytujemy całe zapytanie – zamknięcie gniazda z nieprzeczytanymi danymi
+                // powoduje zerwanie połączenia (ERR_TOO_MANY_RETRIES w Chrome).
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (line.isEmpty()) break
+                }
+                val notFound = request.contains("favicon")
+                val body = if (notFound) ByteArray(0) else page
+                val header =
+                    (if (notFound) "HTTP/1.1 404 Not Found\r\n" else "HTTP/1.1 200 OK\r\n") +
+                        "Content-Type: text/html; charset=utf-8\r\n" +
+                        "Cache-Control: no-store\r\n" +
+                        "Content-Length: ${body.size}\r\nConnection: close\r\n\r\n"
+                val out = c.getOutputStream()
+                out.write(header.toByteArray())
+                out.write(body)
+                out.flush()
+                c.shutdownOutput()
+                // Dajemy przeglądarce chwilę na odebranie danych przed zamknięciem.
+                runCatching { while (c.getInputStream().read() >= 0) { } }
+            }
+        } catch (e: Exception) {
+            Timber.d(e, "Strona pada: połączenie przerwane")
         }
     }
 
@@ -291,6 +318,11 @@ object PhonePadServer {
             ex: Exception,
         ) {
             Timber.w(ex, "Błąd połączenia z telefonem")
+            if (conn == null && wsServer === this) {
+                // Serwer nie wystartował (np. port zajęty przez drugi proces) – ponawiamy.
+                wsServer = null
+                main.postDelayed({ if (sink != null && wsServer == null) startWebSocket(1) }, 500)
+            }
         }
 
         override fun onStart() {}

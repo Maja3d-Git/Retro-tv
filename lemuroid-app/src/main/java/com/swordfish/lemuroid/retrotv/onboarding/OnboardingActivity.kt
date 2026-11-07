@@ -183,7 +183,11 @@ class OnboardingActivity : ComponentActivity() {
                     color = if (phones.isEmpty()) K.muted else K.ok,
                     fontSize = 16.sp,
                 )
-                TvButton("Dalej", primary = true, onClick = next, modifier = Modifier.focusRequester(focus))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TvButton("Dalej", primary = true, onClick = next, modifier = Modifier.focusRequester(focus))
+                    TvButton("Pomiń, ustawię później", onClick = next)
+                }
+                Text("Telefon połączysz w każdej chwili w System → Kontrolery.", color = K.muted, fontSize = 13.sp)
             }
         }
     }

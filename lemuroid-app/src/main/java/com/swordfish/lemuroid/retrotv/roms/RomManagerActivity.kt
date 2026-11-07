@@ -52,6 +52,7 @@ import com.swordfish.lemuroid.app.shared.library.LibraryIndexScheduler
 import com.swordfish.lemuroid.lib.storage.local.RetroTvFolders
 import com.swordfish.lemuroid.retrotv.ui.K
 import com.swordfish.lemuroid.retrotv.ui.Panel
+import com.swordfish.lemuroid.retrotv.ui.RailHeader
 import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
 import com.swordfish.lemuroid.retrotv.ui.SectionTitle
@@ -65,6 +66,7 @@ private enum class RomSection(val title: String) {
     USB("Import z pendrive’a"),
     NAS("Dysk sieciowy"),
     HOMEBREW("Darmowe gry"),
+    LINK("Z linku"),
     STORAGE("Pamięć telewizora"),
 }
 
@@ -118,11 +120,10 @@ private fun RomManagerScreen(activity: RomManagerActivity) {
     Box(Modifier.fillMaxSize().background(K.bg)) {
         Row(Modifier.fillMaxSize()) {
             Column(
-                Modifier.width(220.dp).fillMaxHeight().background(K.nav).padding(horizontal = 16.dp, vertical = 28.dp),
+                Modifier.width(220.dp).fillMaxHeight().background(K.nav).padding(horizontal = 12.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text("RETRO TV", color = K.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, modifier = Modifier.padding(start = 12.dp))
-                Text("Gry i ROM-y", color = K.muted, fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp, bottom = 20.dp))
+                RailHeader("Gry i ROM-y")
                 RomSection.values().forEachIndexed { i, s ->
                     TabItem(s.title, s == section, if (i == 0) Modifier.focusRequester(firstTab) else Modifier) { section = s }
                 }
@@ -133,6 +134,7 @@ private fun RomManagerScreen(activity: RomManagerActivity) {
                     RomSection.USB -> UsbSection(activity, { job = it }) { message = it }
                     RomSection.NAS -> NasSection(activity, { job = it }) { message = it }
                     RomSection.HOMEBREW -> HomebrewSection(activity, { job = it }) { message = it }
+                    RomSection.LINK -> LinkSection(activity, { job = it }) { message = it }
                     RomSection.STORAGE -> StorageSection(activity) { message = it }
                 }
             }
@@ -180,16 +182,16 @@ private fun TabItem(
     Box(
         modifier
             .fillMaxWidth()
-            .height(46.dp)
+            .height(42.dp)
             .onFocusChanged { if (it.isFocused) onSelect() }
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(if (selected) K.p.activeBg else Color.Transparent)
-            .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+            .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(10.dp))
             .clickable(interactionSource = source, indication = null, onClick = onSelect)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Text(label, color = if (selected) K.p.activeFg else K.muted, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+        Text(label, color = if (selected) K.p.activeFg else K.text, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
     }
 }
 
@@ -561,6 +563,72 @@ private fun markInstalled(
     val prefs = context.getSharedPreferences("retrotv", Context.MODE_PRIVATE)
     val set = (prefs.getStringSet("homebrew_installed", emptySet()) ?: emptySet()) + repo
     prefs.edit().putStringSet("homebrew_installed", set).apply()
+}
+
+// ---------- Z linku ----------
+
+@Composable
+private fun LinkSection(
+    activity: RomManagerActivity,
+    setJob: (Job?) -> Unit,
+    toast: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf("") }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        com.swordfish.lemuroid.retrotv.pad.PhonePadText.listener = { url = it }
+        onDispose { com.swordfish.lemuroid.retrotv.pad.PhonePadText.listener = null }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionTitle("Z linku", "Pobierz plik gry z bezpośredniego linku, np. ze strony autora, itch.io albo archive.org")
+        OutlinedTextField(
+            url,
+            { url = it },
+            label = { Text("Adres pliku (https://…)") },
+            singleLine = true,
+            colors =
+                OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = K.text,
+                    unfocusedTextColor = K.text,
+                    focusedBorderColor = K.coral,
+                    unfocusedBorderColor = K.line,
+                    focusedLabelColor = K.coral,
+                    unfocusedLabelColor = K.muted,
+                    cursorColor = K.accent,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Pobierz", primary = true, enabled = url.startsWith("http"), onClick = {
+                scope.launch {
+                    try {
+                        setJob(Job("Łączenie…", 0f))
+                        val target = LinkDownload.open(url)
+                        target.response.use { r ->
+                            RomFiles.copyIn(activity, "linki", target.name, target.size, { r.body!!.byteStream() }) { p ->
+                                setJob(Job("Pobieram ${target.name}", p))
+                            }
+                        }
+                        activity.rescan()
+                        toast("Pobrano ${target.name}. Gra pojawi się w bibliotece.")
+                        url = ""
+                    } catch (e: Exception) {
+                        Timber.w(e, "Pobieranie z linku nie powiodło się")
+                        toast("Nie udało się pobrać: ${e.message}")
+                    } finally {
+                        setJob(null)
+                    }
+                }
+            })
+        }
+        Text(
+            "Najwygodniej wkleić link na telefonie: połącz telefon jako pad i użyj przycisku Klawiatura. " +
+                "Pobieraj tylko gry, do których masz prawo – darmowe gry homebrew albo kopie własnych kartridży.",
+            color = K.muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
+    }
 }
 
 // ---------- Pamięć ----------

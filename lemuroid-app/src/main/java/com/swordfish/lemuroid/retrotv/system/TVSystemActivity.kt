@@ -128,8 +128,16 @@ private fun SystemScreen(
     startUpdate: Boolean,
     initial: Section,
 ) {
+    // Kontrolery mają własne wejście w menu głównym – otwierane osobno, bez zakładek Systemu.
+    if (initial == Section.CONTROLLERS) {
+        Box(Modifier.fillMaxSize().background(K.bg).tvPane().padding(horizontal = 40.dp, vertical = 28.dp)) {
+            ControllersSection()
+        }
+        return
+    }
+    val visible = remember { Section.values().filter { it != Section.CONTROLLERS } }
     var section by remember { mutableStateOf(initial) }
-    val tabs = remember { Section.values().associateWith { FocusRequester() } }
+    val tabs = remember { visible.associateWith { FocusRequester() } }
     LaunchedEffect(Unit) { runCatching { tabs.getValue(initial).requestFocus() } }
 
     Row(Modifier.fillMaxSize().background(K.bg)) {
@@ -145,7 +153,7 @@ private fun SystemScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             RailHeader("System")
-            Section.values().forEachIndexed { index, s ->
+            visible.forEach { s ->
                 val source = remember { MutableInteractionSource() }
                 val focused by source.collectIsFocusedAsState()
                 val selected = s == section

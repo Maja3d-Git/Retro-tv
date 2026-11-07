@@ -63,6 +63,32 @@ class PhoneHomeActivity : ComponentActivity() {
             )
         }
 
+    /** Skanuje kod QR z ekranu telewizora (skaner Google, bez uprawnienia do aparatu) i otwiera pad. */
+    private fun scanQr(onError: (String) -> Unit) {
+        val options =
+            com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+                .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
+                .build()
+        try {
+            com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(this, options).startScan()
+                .addOnSuccessListener { barcode ->
+                    val raw = barcode.rawValue ?: return@addOnSuccessListener onError("Nie odczytano kodu.")
+                    val uri = android.net.Uri.parse(raw)
+                    val k = uri.getQueryParameter("k")
+                    if (k.isNullOrBlank() || uri.host.isNullOrBlank()) return@addOnSuccessListener onError("To nie jest kod z Retro TV.")
+                    val port = if (uri.port > 0) uri.port else com.swordfish.lemuroid.retrotv.pad.PhonePadServer.HTTP_PORT
+                    prefs.edit().putString("code", k.lowercase()).putString("last_host", "${uri.host}:$port").apply()
+                    PhonePadActivity.start(this, k.lowercase())
+                }
+                .addOnFailureListener { e ->
+                    timber.log.Timber.w(e, "Skaner QR niedostępny")
+                    onError("Skaner niedostępny na tym telefonie – wpisz kod ręcznie.")
+                }
+        } catch (e: Exception) {
+            onError("Skaner niedostępny na tym telefonie – wpisz kod ręcznie.")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RetroTvTheme.apply(this)
@@ -96,8 +122,12 @@ class PhoneHomeActivity : ComponentActivity() {
         ) {
             Text("Retro TV", color = K.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Text("Telefon jako pad i pilot do Retro TV na telewizorze.", color = K.muted, fontSize = 16.sp)
+            TvButton("Zeskanuj kod QR z telewizora", primary = true, modifier = Modifier.fillMaxWidth(), onClick = {
+                scanQr { error = it }
+            })
+            Text("Na telewizorze: Kontrolery. Po zeskanowaniu pad otworzy się sam.", color = K.muted, fontSize = 13.sp)
             Spacer(Modifier.height(4.dp))
-            Text("Kod telewizora", color = K.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text("Albo wpisz kod telewizora", color = K.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             OutlinedTextField(
                 value = code,
                 onValueChange = { code = it.filter { ch -> ch.isLetterOrDigit() }.take(12) },
@@ -121,7 +151,7 @@ class PhoneHomeActivity : ComponentActivity() {
                 fontSize = 14.sp,
             )
             error?.let { Text(it, color = K.coral, fontSize = 14.sp) }
-            TvButton("Pad – graj telefonem", primary = true, modifier = Modifier.fillMaxWidth(), onClick = {
+            TvButton("Pad – graj telefonem", modifier = Modifier.fillMaxWidth(), onClick = {
                 validCode()?.let { PhonePadActivity.start(this@PhoneHomeActivity, it) }
             })
             Text(

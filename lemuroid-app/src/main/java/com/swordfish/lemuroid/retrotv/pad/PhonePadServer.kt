@@ -95,6 +95,29 @@ object PhonePadServer {
     private val candidatePorts = listOf(HTTP_PORT, 52800, 38800, 18800, 58800)
     private val portFlow = MutableStateFlow(0)
 
+    /** Ostatnie połączenie z innego urządzenia (adres · godzina) – do diagnostyki sieci. */
+    val lastVisitor = MutableStateFlow<String?>(null)
+
+    /**
+     * Test z telewizora: łączy się z własnym serwerem przez adres w sieci lokalnej.
+     * Zwraca opis wyniku (wywoływać poza wątkiem interfejsu).
+     */
+    fun selfTest(ip: String): String {
+        val p = portFlow.value
+        if (p == 0) return "Serwer nie działa"
+        return try {
+            java.net.Socket().use { s ->
+                s.connect(InetSocketAddress(ip, p), 3000)
+                s.soTimeout = 3000
+                s.getOutputStream().write("GET /ping HTTP/1.1\r\nHost: $ip\r\nConnection: close\r\n\r\n".toByteArray())
+                val reply = s.getInputStream().readBytes().toString(Charsets.UTF_8)
+                if (reply.contains("RETROTV-OK")) "Serwer odpowiada poprawnie ($ip:$p)" else "Dziwna odpowiedź: ${reply.take(60)}"
+            }
+        } catch (e: Exception) {
+            "Błąd: ${e.javaClass.simpleName} ${e.message ?: ""}".trim()
+        }.also { Timber.i("Test serwera pada: %s", it) }
+    }
+
     /** Port strony pada (0 = serwer nie działa). WebSocket działa na porcie o jeden wyższym. */
     val port: StateFlow<Int> = portFlow
 
@@ -286,6 +309,12 @@ object PhonePadServer {
                     } catch (e: Exception) {
                         continue
                     }
+                val remote = client.inetAddress
+                if (remote != null && !remote.isLoopbackAddress && remote.hostAddress != com.swordfish.lemuroid.retrotv.system.SystemStatus.network(appContext).ipAddress) {
+                    val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.ROOT).format(java.util.Date())
+                    lastVisitor.value = "${remote.hostAddress} · $time"
+                    Timber.i("Pad w telefonie: połączenie od %s", remote.hostAddress)
+                }
                 // Każde połączenie osobno: przeglądarki otwierają zapasowe połączenia, które nic nie wysyłają.
                 thread(isDaemon = true) { serveHttp(client, page) }
             }
@@ -329,6 +358,7 @@ object PhonePadServer {
                 val (status, type, body) =
                     when {
                         path.contains("favicon") -> Triple("404 Not Found", "text/plain", ByteArray(0))
+                        path.startsWith("/ping") -> Triple("200 OK", "text/plain", "RETROTV-OK".toByteArray())
                         method == "PUT" && path.startsWith("/upload") -> handleUpload(path, headers, input)
                         path.startsWith("/upload") -> Triple("200 OK", "text/html; charset=utf-8", asset("retrotv_pad/upload.html"))
                         else -> Triple("200 OK", "text/html; charset=utf-8", page)

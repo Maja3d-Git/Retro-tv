@@ -538,18 +538,20 @@ private fun ControllersSection() {
         }
         Column(
             Modifier
-                .width(230.dp)
+                .width(240.dp)
+                .fillMaxHeight()
                 .clip(RoundedCornerShape(16.dp))
                 .background(K.card)
-                .padding(20.dp),
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Telefon jako pad", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             if (ip != null) {
                 val serverPort by PhonePadServer.port.collectAsState()
                 val url = remember(serverPort) { PhonePadServer.pairingUrl(context, ip) }
-                QrImage(url, Modifier.size(180.dp))
+                QrImage(url, Modifier.size(150.dp))
                 val ssid = remember { SystemStatus.network(context).ssid }
                 if (ssid != null) Text("Sieć: $ssid", color = K.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(
@@ -564,6 +566,22 @@ private fun ControllersSection() {
                     color = if (serverPort > 0) K.ok else K.muted,
                     fontSize = 12.sp,
                 )
+                val visitor by PhonePadServer.lastVisitor.collectAsState()
+                Text(
+                    visitor?.let { "Telefon dotarł do TV: $it" } ?: "Żaden telefon jeszcze nie dotarł do TV",
+                    color = if (visitor != null) K.ok else K.coral,
+                    fontSize = 12.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                var testResult by remember { mutableStateOf<String?>(null) }
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                TvButton("Test serwera", onClick = {
+                    testResult = "Sprawdzam…"
+                    scope.launch {
+                        testResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PhonePadServer.selfTest(ip) }
+                    }
+                })
+                testResult?.let { Text(it, color = K.muted, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
             } else {
                 Text("Brak połączenia z siecią lokalną.", color = K.coral, fontSize = 14.sp)
             }
@@ -628,7 +646,7 @@ private fun LogsSection() {
             Text("Wyślij na telefon", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             if (ip != null) {
                 val url = server.url(ip)
-                QrImage(url, Modifier.size(180.dp))
+                QrImage(url, Modifier.size(150.dp))
                 Text(
                     "Zeskanuj aparatem telefonu w tej samej sieci Wi-Fi. Dziennik otworzy się w przeglądarce.",
                     color = K.muted,

@@ -44,6 +44,7 @@ class LogShareServer(private val context: Context) {
             while (!server.isClosed) {
                 try {
                     val client = server.accept()
+                    Timber.i("Serwer logów: połączenie od %s", client.inetAddress?.hostAddress)
                     if (System.currentTimeMillis() - startedAt > MAX_LIFETIME_MS) {
                         client.close()
                         stop()

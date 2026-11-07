@@ -44,9 +44,6 @@ import com.swordfish.lemuroid.retrotv.home.HomeActions
 import com.swordfish.lemuroid.retrotv.home.HomeScreen
 import com.swordfish.lemuroid.retrotv.home.HomeViewModel
 import com.swordfish.lemuroid.retrotv.home.PlayStats
-import com.swordfish.lemuroid.retrotv.home.ConsoleTests
-import com.swordfish.lemuroid.lib.library.MetaSystemID
-import kotlinx.coroutines.launch
 import com.swordfish.lemuroid.retrotv.onboarding.OnboardingActivity
 import com.swordfish.lemuroid.retrotv.roms.RomFiles
 import com.swordfish.lemuroid.retrotv.roms.RomManagerActivity
@@ -81,7 +78,6 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
     private var appliedPalette: Palette? = null
     private var homeViewModel: HomeViewModel? = null
-    private var lastLaunched: Game? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,22 +120,9 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
     private val homeActions =
         object : HomeActions {
-            override fun play(game: Game) {
-                lastLaunched = game
-                gameInteractor.onGamePlay(game)
-            }
+            override fun play(game: Game) = gameInteractor.onGamePlay(game)
 
-            override fun restart(game: Game) {
-                lastLaunched = game
-                gameInteractor.onGameRestart(game)
-            }
-
-            override fun testSystem(meta: MetaSystemID) {
-                lifecycleScope.launch {
-                    val game = retrogradeDb.gameDao().firstBySystems(meta.systemIDs.map { it.dbname })
-                    if (game != null) play(game)
-                }
-            }
+            override fun restart(game: Game) = gameInteractor.onGameRestart(game)
 
             override fun toggleFavorite(game: Game) = gameInteractor.onFavoriteToggle(game, !game.isFavorite)
 
@@ -191,18 +174,6 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
         when (requestCode) {
             BaseGameActivity.REQUEST_PLAY_GAME -> {
-                lastLaunched?.let { g ->
-                    when (resultCode) {
-                        Activity.RESULT_OK -> ConsoleTests.record(applicationContext, g.systemId, true, "uruchomiono „${g.displayName()}”")
-                        BaseGameActivity.RESULT_ERROR, BaseGameActivity.RESULT_UNEXPECTED_ERROR ->
-                            ConsoleTests.record(
-                                applicationContext,
-                                g.systemId,
-                                false,
-                                data?.getStringExtra(BaseGameActivity.PLAY_GAME_RESULT_ERROR) ?: "błąd uruchamiania",
-                            )
-                    }
-                }
                 if (resultCode == Activity.RESULT_OK && data != null) {
                     val played = data.getSerializableExtra(BaseGameActivity.PLAY_GAME_RESULT_GAME) as? Game
                     val duration = data.getLongExtra(BaseGameActivity.PLAY_GAME_RESULT_SESSION_DURATION, 0L)

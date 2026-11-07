@@ -43,6 +43,7 @@ import com.swordfish.lemuroid.lib.library.db.entity.Game
 import com.swordfish.lemuroid.retrotv.home.HomeActions
 import com.swordfish.lemuroid.retrotv.home.HomeScreen
 import com.swordfish.lemuroid.retrotv.home.HomeViewModel
+import com.swordfish.lemuroid.retrotv.roms.RomManagerActivity
 import com.swordfish.lemuroid.retrotv.system.TVSystemActivity
 import com.swordfish.lemuroid.retrotv.ui.Palette
 import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
@@ -118,6 +119,10 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
                 } else {
                     TVFolderPickerLauncher.pickFolder(this@MainTVActivity)
                 }
+            }
+
+            override fun openRomManager() {
+                startActivity(Intent(this@MainTVActivity, RomManagerActivity::class.java))
             }
 
             override fun rescan() = LibraryIndexScheduler.scheduleLibrarySync(applicationContext)

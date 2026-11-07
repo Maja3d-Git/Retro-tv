@@ -85,3 +85,13 @@
 
 ## LibretroDroid
 -keep class com.swordfish.libretrodroid.** { *; }
+
+## Retro TV: pad w telefonie (WebSocket) i dysk sieciowy (SMB)
+-keep class org.java_websocket.** { *; }
+-dontwarn org.slf4j.**
+-keep class jcifs.** { *; }
+-dontwarn jcifs.**
+-dontwarn javax.**
+-dontwarn org.ietf.jgss.**
+-dontwarn org.bouncycastle.**
+-keep class org.bouncycastle.** { *; }

@@ -79,6 +79,8 @@ interface HomeActions {
 
     fun pickFolder()
 
+    fun openRomManager()
+
     fun rescan()
 
     fun stopScan()
@@ -166,7 +168,7 @@ private fun Rail(
         }
 
         RailLabel("BIBLIOTEKA")
-        RailItem("Dodaj folder z grami", false, onClick = actions::pickFolder)
+        RailItem("Gry i ROM-y", false, onClick = actions::openRomManager)
         if (state.scanning) {
             RailItem("Zatrzymaj skanowanie", false, onClick = actions::stopScan)
         } else {
@@ -401,6 +403,7 @@ private fun EmptyLibrary(
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TvButton("Wybierz folder", primary = true, onClick = actions::pickFolder, modifier = Modifier.focusRequester(focus))
+            TvButton("Pobierz darmowe gry", onClick = actions::openRomManager)
             TvButton("Podłącz pada", onClick = actions::openControllers)
         }
     }

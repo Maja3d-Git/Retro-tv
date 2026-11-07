@@ -18,6 +18,7 @@ import com.swordfish.lemuroid.lib.storage.StorageFile
 import com.swordfish.lemuroid.lib.storage.StorageProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import java.io.File
@@ -35,10 +36,13 @@ class StorageAccessFrameworkProvider(private val context: Context) : StorageProv
 
     override val enabledByDefault = true
 
+    // Retro TV: oprócz głównego folderu skanujemy dodatkowe foldery dodane w menedżerze ROM-ów.
     override fun listBaseStorageFiles(): Flow<List<BaseStorageFile>> {
-        return getExternalFolder()?.let { folder ->
-            traverseDirectoryEntries(Uri.parse(folder))
-        } ?: emptyFlow()
+        val folders = (listOfNotNull(getExternalFolder()) + RetroTvFolders.extraFolders(context)).distinct()
+        if (folders.isEmpty()) return emptyFlow()
+        return flow {
+            folders.forEach { folder -> emitAll(traverseDirectoryEntries(Uri.parse(folder))) }
+        }
     }
 
     override fun getStorageFile(baseStorageFile: BaseStorageFile): StorageFile? {

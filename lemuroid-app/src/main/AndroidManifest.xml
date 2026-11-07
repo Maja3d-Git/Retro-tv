@@ -153,6 +153,11 @@
             android:name="com.swordfish.lemuroid.retrotv.system.TVSystemActivity"
             android:theme="@style/LemuroidMaterialTheme" />
 
+        <activity
+            android:name="com.swordfish.lemuroid.retrotv.roms.RomManagerActivity"
+            android:theme="@style/LemuroidMaterialTheme"
+            android:windowSoftInputMode="adjustResize" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.retrotv.files"

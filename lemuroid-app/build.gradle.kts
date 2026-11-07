@@ -82,7 +82,13 @@ android {
             useLegacyPackaging = true
         }
         resources {
-            excludes += setOf("META-INF/DEPENDENCIES", "META-INF/library_release.kotlin_module")
+            excludes +=
+                setOf(
+                    "META-INF/DEPENDENCIES",
+                    "META-INF/library_release.kotlin_module",
+                    "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                    "META-INF/versions/**/module-info.class",
+                )
         }
     }
 
@@ -219,6 +225,7 @@ dependencies {
 
     implementation("com.google.zxing:core:3.5.3")
     implementation("org.java-websocket:Java-WebSocket:1.5.7")
+    implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
 
     implementation(deps.libs.composeSettings.uiTiles)
     implementation(deps.libs.composeSettings.uiTilesExtended)

@@ -1,0 +1,605 @@
+package com.swordfish.lemuroid.retrotv.roms
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.swordfish.lemuroid.app.shared.library.LibraryIndexScheduler
+import com.swordfish.lemuroid.lib.storage.local.RetroTvFolders
+import com.swordfish.lemuroid.retrotv.ui.K
+import com.swordfish.lemuroid.retrotv.ui.Panel
+import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
+import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
+import com.swordfish.lemuroid.retrotv.ui.SectionTitle
+import com.swordfish.lemuroid.retrotv.ui.TvButton
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.io.File
+
+private enum class RomSection(val title: String) {
+    FOLDERS("Foldery z grami"),
+    USB("Import z pendrive’a"),
+    NAS("Dysk sieciowy"),
+    HOMEBREW("Darmowe gry"),
+    STORAGE("Pamięć telewizora"),
+}
+
+/** Stan długiej operacji (kopiowanie, pobieranie). */
+private data class Job(val label: String, val progress: Float)
+
+class RomManagerActivity : ComponentActivity() {
+    private var onTreePicked: ((Uri) -> Unit)? = null
+
+    private val treePicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                onTreePicked?.invoke(uri)
+            }
+            onTreePicked = null
+        }
+
+    /** Otwiera systemowe okno wyboru folderu; zwraca false, gdy telewizor go nie ma. */
+    fun pickTree(onPicked: (Uri) -> Unit): Boolean {
+        return try {
+            onTreePicked = onPicked
+            treePicker.launch(null)
+            true
+        } catch (e: Exception) {
+            Timber.w(e, "Brak systemowego okna wyboru folderu")
+            onTreePicked = null
+            false
+        }
+    }
+
+    fun rescan() = LibraryIndexScheduler.scheduleLibrarySync(applicationContext)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        RetroTvTheme.apply(this)
+        setContent { RetroTvContent { RomManagerScreen(this) } }
+    }
+}
+
+@Composable
+private fun RomManagerScreen(activity: RomManagerActivity) {
+    var section by remember { mutableStateOf(RomSection.FOLDERS) }
+    var job by remember { mutableStateOf<Job?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val firstTab = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstTab.requestFocus() } }
+
+    Box(Modifier.fillMaxSize().background(K.bg)) {
+        Row(Modifier.fillMaxSize()) {
+            Column(
+                Modifier.width(220.dp).fillMaxHeight().background(K.nav).padding(horizontal = 16.dp, vertical = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text("RETRO TV", color = K.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, modifier = Modifier.padding(start = 12.dp))
+                Text("Gry i ROM-y", color = K.muted, fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp, bottom = 20.dp))
+                RomSection.values().forEachIndexed { i, s ->
+                    TabItem(s.title, s == section, if (i == 0) Modifier.focusRequester(firstTab) else Modifier) { section = s }
+                }
+            }
+            Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 32.dp, vertical = 28.dp)) {
+                when (section) {
+                    RomSection.FOLDERS -> FoldersSection(activity) { message = it }
+                    RomSection.USB -> UsbSection(activity, { job = it }) { message = it }
+                    RomSection.NAS -> NasSection(activity, { job = it }) { message = it }
+                    RomSection.HOMEBREW -> HomebrewSection(activity, { job = it }) { message = it }
+                    RomSection.STORAGE -> StorageSection(activity) { message = it }
+                }
+            }
+        }
+        val j = job
+        if (j != null) {
+            Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+                Column(
+                    Modifier.width(420.dp).clip(RoundedCornerShape(16.dp)).background(K.card).padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(j.label, color = K.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    ProgressBar(j.progress)
+                    Text("${(j.progress * 100).toInt()}%", color = K.muted, fontSize = 14.sp)
+                }
+            }
+        }
+        val m = message
+        if (m != null && j == null) {
+            LaunchedEffect(m) {
+                kotlinx.coroutines.delay(4000)
+                message = null
+            }
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.BottomCenter) {
+                Text(
+                    m,
+                    color = K.p.activeFg,
+                    fontSize = 15.sp,
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(K.p.activeBg).padding(horizontal = 18.dp, vertical = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabItem(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier,
+    onSelect: () -> Unit,
+) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(46.dp)
+            .onFocusChanged { if (it.isFocused) onSelect() }
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) K.p.activeBg else Color.Transparent)
+            .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+            .clickable(interactionSource = source, indication = null, onClick = onSelect)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(label, color = if (selected) K.p.activeFg else K.muted, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun ProgressBar(progress: Float) {
+    Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(K.line)) {
+        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxHeight().clip(RoundedCornerShape(4.dp)).background(K.accent))
+    }
+}
+
+/** Wiersz listy z tekstem i przyciskami po prawej. */
+@Composable
+private fun ListRow(
+    title: String,
+    subtitle: String?,
+    actions: @Composable () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(K.card).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = K.text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, color = K.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
+    }
+}
+
+private val noPickerMessage =
+    "Ten telewizor nie ma systemowego okna wyboru folderów. Skorzystaj z dysku sieciowego albo darmowych gier."
+
+// ---------- Foldery ----------
+
+@Composable
+private fun FoldersSection(
+    activity: RomManagerActivity,
+    toast: (String) -> Unit,
+) {
+    var folders by remember { mutableStateOf(RetroTvFolders.allFolders(activity)) }
+    val main = RetroTvFolders.mainFolder(activity)
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        SectionTitle("Foldery z grami", "Retro TV skanuje wszystkie te foldery i pamięć telewizora")
+        LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                ListRow("Pamięć Retro TV", "Gry zaimportowane z pendrive’a, dysku sieciowego i katalogu") {}
+            }
+            items(folders) { uri ->
+                ListRow(RomFiles.folderLabel(activity, uri), if (uri == main) "folder główny" else "folder dodatkowy") {
+                    TvButton("Usuń", onClick = {
+                        if (uri == main) RetroTvFolders.clearMainFolder(activity) else RetroTvFolders.removeExtraFolder(activity, uri)
+                        runCatching {
+                            activity.contentResolver.releasePersistableUriPermission(Uri.parse(uri), Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        folders = RetroTvFolders.allFolders(activity)
+                        activity.rescan()
+                        toast("Usunięto folder. Gry z niego znikną z biblioteki.")
+                    })
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Dodaj folder", primary = true, onClick = {
+                val ok =
+                    activity.pickTree { uri ->
+                        RetroTvFolders.addExtraFolder(activity, uri.toString())
+                        folders = RetroTvFolders.allFolders(activity)
+                        activity.rescan()
+                        toast("Dodano folder. Skanuję gry…")
+                    }
+                if (!ok) toast(noPickerMessage)
+            })
+            TvButton("Skanuj ponownie", onClick = {
+                activity.rescan()
+                toast("Skanuję bibliotekę…")
+            })
+        }
+        Text(
+            "Folder na pendrivie działa tylko wtedy, gdy pendrive jest podłączony. Żeby gry zostały na stałe, użyj „Import z pendrive’a”.",
+            color = K.muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
+    }
+}
+
+// ---------- Pendrive ----------
+
+@Composable
+private fun UsbSection(
+    activity: RomManagerActivity,
+    setJob: (Job?) -> Unit,
+    toast: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var found by remember { mutableStateOf<List<RomEntry>?>(null) }
+    var scanning by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+
+    fun import(entries: List<RomEntry>) {
+        scope.launch {
+            try {
+                entries.forEachIndexed { i, e ->
+                    setJob(Job("Kopiuję ${i + 1}/${entries.size}: ${e.name}", 0f))
+                    RomFiles.copyIn(activity, "pendrive", e.name, e.size, { activity.contentResolver.openInputStream(Uri.parse(e.source))!! }) { p ->
+                        setJob(Job("Kopiuję ${i + 1}/${entries.size}: ${e.name}", p))
+                    }
+                }
+                activity.rescan()
+                toast("Skopiowano ${entries.size} plików. Gry pojawią się w bibliotece.")
+                selected = emptySet()
+            } catch (e: Exception) {
+                Timber.e(e, "Import z pendrive'a nie powiódł się")
+                toast("Kopiowanie przerwane: ${e.message}")
+            } finally {
+                setJob(null)
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        SectionTitle("Import z pendrive’a", "Skopiuj gry do pamięci telewizora, żeby działały bez pendrive’a")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Wybierz folder na pendrivie", primary = found == null, onClick = {
+                val ok =
+                    activity.pickTree { uri ->
+                        scanning = true
+                        scope.launch {
+                            found = runCatching { RomFiles.scanTree(activity, uri) }.getOrElse { emptyList() }
+                            selected = found!!.map { it.source }.toSet()
+                            scanning = false
+                        }
+                    }
+                if (!ok) toast(noPickerMessage)
+            })
+            val list = found
+            if (!list.isNullOrEmpty()) {
+                val chosen = list.filter { it.source in selected }
+                TvButton(
+                    "Kopiuj zaznaczone (${chosen.size} · ${RomFiles.formatSize(chosen.sumOf { it.size })})",
+                    primary = true,
+                    enabled = chosen.isNotEmpty(),
+                    onClick = { import(chosen) },
+                )
+            }
+        }
+        Text("Wolne miejsce w telewizorze: ${RomFiles.formatSize(RomFiles.freeBytes(activity))}", color = K.muted, fontSize = 14.sp)
+        when {
+            scanning -> Text("Szukam gier…", color = K.muted, fontSize = 15.sp)
+            found?.isEmpty() == true -> Text("W tym folderze nie znaleziono plików gier.", color = K.muted, fontSize = 15.sp)
+            found != null ->
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(found!!) { e ->
+                        val on = e.source in selected
+                        ListRow(e.name, RomFiles.formatSize(e.size)) {
+                            TvButton(if (on) "✓ Zaznaczona" else "Zaznacz", onClick = {
+                                selected = if (on) selected - e.source else selected + e.source
+                            })
+                        }
+                    }
+                }
+        }
+    }
+}
+
+// ---------- Dysk sieciowy ----------
+
+private object NasPrefs {
+    private fun p(c: Context) = c.getSharedPreferences("retrotv", Context.MODE_PRIVATE)
+
+    fun get(
+        c: Context,
+        key: String,
+    ) = p(c).getString("nas_$key", "") ?: ""
+
+    fun save(
+        c: Context,
+        host: String,
+        share: String,
+        user: String,
+        pass: String,
+    ) = p(c).edit().putString("nas_host", host).putString("nas_share", share).putString("nas_user", user).putString("nas_pass", pass).apply()
+}
+
+@Composable
+private fun NasSection(
+    activity: RomManagerActivity,
+    setJob: (Job?) -> Unit,
+    toast: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var host by remember { mutableStateOf(NasPrefs.get(activity, "host")) }
+    var share by remember { mutableStateOf(NasPrefs.get(activity, "share")) }
+    var user by remember { mutableStateOf(NasPrefs.get(activity, "user")) }
+    var pass by remember { mutableStateOf(NasPrefs.get(activity, "pass")) }
+    var source by remember { mutableStateOf<SmbSource?>(null) }
+    var path by remember { mutableStateOf("") }
+    var entries by remember { mutableStateOf<List<RomEntry>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun open(p: String) {
+        val s = source ?: return
+        loading = true
+        error = null
+        scope.launch {
+            try {
+                entries = s.list(p)
+                path = p
+            } catch (e: Exception) {
+                Timber.w(e, "SMB: nie udało się otworzyć %s", p)
+                error = "Nie udało się połączyć: ${e.message}"
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    val colors =
+        OutlinedTextFieldDefaults.colors(
+            focusedTextColor = K.text,
+            unfocusedTextColor = K.text,
+            focusedBorderColor = K.coral,
+            unfocusedBorderColor = K.line,
+            focusedLabelColor = K.coral,
+            unfocusedLabelColor = K.muted,
+            cursorColor = K.accent,
+        )
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionTitle("Dysk sieciowy", "Kopiuj gry z NAS-a albo folderu udostępnionego na komputerze (SMB)")
+        if (source == null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(host, { host = it }, label = { Text("Adres (np. 192.168.1.10)") }, singleLine = true, colors = colors, modifier = Modifier.weight(1f))
+                OutlinedTextField(share, { share = it }, label = { Text("Udział (np. gry)") }, singleLine = true, colors = colors, modifier = Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(user, { user = it }, label = { Text("Użytkownik (puste = gość)") }, singleLine = true, colors = colors, modifier = Modifier.weight(1f))
+                OutlinedTextField(
+                    pass,
+                    { pass = it },
+                    label = { Text("Hasło") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    colors = colors,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton("Połącz", primary = true, enabled = host.isNotBlank() && share.isNotBlank(), onClick = {
+                    NasPrefs.save(activity, host.trim(), share.trim(), user.trim(), pass)
+                    source = SmbSource(host.trim(), share.trim(), user.trim(), pass)
+                    open("")
+                })
+            }
+            Text(
+                "Tekst możesz wpisać pilotem albo na telefonie podłączonym jako pad (przycisk Klawiatura).",
+                color = K.muted,
+                fontSize = 14.sp,
+            )
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton("Rozłącz", onClick = {
+                    source = null
+                    entries = emptyList()
+                    path = ""
+                })
+                if (path.isNotEmpty()) TvButton("W górę", onClick = { open(path.substringBeforeLast('/', "")) })
+                Text("\\\\${source!!.host}\\${source!!.share}\\${path.replace('/', '\\')}", color = K.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            error?.let { Text(it, color = K.coral, fontSize = 15.sp) }
+            if (loading) Text("Wczytywanie…", color = K.muted, fontSize = 15.sp)
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(entries) { e ->
+                    if (e.isDirectory) {
+                        ListRow(e.name, "folder") { TvButton("Otwórz", onClick = { open(e.source) }) }
+                    } else {
+                        ListRow(e.name, RomFiles.formatSize(e.size)) {
+                            TvButton("Kopiuj", primary = true, onClick = {
+                                val s = source ?: return@TvButton
+                                scope.launch {
+                                    try {
+                                        setJob(Job("Kopiuję ${e.name}", 0f))
+                                        RomFiles.copyIn(activity, "nas", e.name, e.size, { s.open(e.source) }) { p -> setJob(Job("Kopiuję ${e.name}", p)) }
+                                        activity.rescan()
+                                        toast("Skopiowano ${e.name}")
+                                    } catch (ex: Exception) {
+                                        Timber.e(ex, "SMB: kopiowanie nie powiodło się")
+                                        toast("Kopiowanie nie powiodło się: ${ex.message}")
+                                    } finally {
+                                        setJob(null)
+                                    }
+                                }
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------- Darmowe gry ----------
+
+@Composable
+private fun HomebrewSection(
+    activity: RomManagerActivity,
+    setJob: (Job?) -> Unit,
+    toast: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var items by remember { mutableStateOf<List<HomebrewCatalog.Item>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var installed by remember { mutableStateOf(installedNames(activity)) }
+    LaunchedEffect(Unit) {
+        try {
+            items = HomebrewCatalog.load()
+        } catch (e: Exception) {
+            Timber.w(e, "Nie udało się pobrać katalogu homebrew")
+            error = "Nie udało się pobrać listy gier: ${e.message}"
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionTitle("Darmowe gry", "Gry homebrew, które autorzy udostępniają za darmo")
+        error?.let { Text(it, color = K.coral, fontSize = 15.sp) }
+        val list = items
+        if (list == null && error == null) Text("Wczytywanie listy…", color = K.muted, fontSize = 15.sp)
+        if (list != null) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(list) { item ->
+                    val have = installed.any { it.startsWith(item.title.lowercase()) } || installed.contains(item.repo)
+                    ListRow("${item.title} · ${item.system.uppercase()}", "${item.description}\n${item.author} · licencja ${item.license}") {
+                        TvButton(if (have) "Pobrano" else "Pobierz", primary = !have, enabled = !have, onClick = {
+                            scope.launch {
+                                try {
+                                    setJob(Job("Szukam pliku: ${item.title}", 0f))
+                                    val asset = HomebrewCatalog.resolve(item)
+                                    setJob(Job("Pobieram ${item.title}", 0f))
+                                    RomFiles.copyIn(activity, "homebrew", asset.name, asset.size, { HomebrewCatalog.open(asset) }) { p ->
+                                        setJob(Job("Pobieram ${item.title}", p))
+                                    }
+                                    markInstalled(activity, item.repo)
+                                    installed = installedNames(activity)
+                                    activity.rescan()
+                                    toast("Pobrano ${item.title}. Gra pojawi się w bibliotece.")
+                                } catch (e: Exception) {
+                                    Timber.e(e, "Pobieranie %s nie powiodło się", item.title)
+                                    toast("Nie udało się pobrać: ${e.message}")
+                                } finally {
+                                    setJob(null)
+                                }
+                            }
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun installedNames(context: Context): Set<String> =
+    context.getSharedPreferences("retrotv", Context.MODE_PRIVATE).getStringSet("homebrew_installed", emptySet()) ?: emptySet()
+
+private fun markInstalled(
+    context: Context,
+    repo: String,
+) {
+    val prefs = context.getSharedPreferences("retrotv", Context.MODE_PRIVATE)
+    val set = (prefs.getStringSet("homebrew_installed", emptySet()) ?: emptySet()) + repo
+    prefs.edit().putStringSet("homebrew_installed", set).apply()
+}
+
+// ---------- Pamięć ----------
+
+@Composable
+private fun StorageSection(
+    activity: RomManagerActivity,
+    toast: (String) -> Unit,
+) {
+    var files by remember { mutableStateOf(RomFiles.internalFiles(activity)) }
+    var confirm by remember { mutableStateOf<File?>(null) }
+    val root = RomFiles.internalDir(activity)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionTitle(
+            "Pamięć telewizora",
+            "Gry w pamięci Retro TV: ${files.size} · ${RomFiles.formatSize(files.sumOf { it.length() })} · " +
+                "wolne ${RomFiles.formatSize(RomFiles.freeBytes(activity))} z ${RomFiles.formatSize(RomFiles.totalBytes(activity))}",
+        )
+        if (files.isEmpty()) {
+            Panel { Text("Nie ma jeszcze gier w pamięci. Zaimportuj je z pendrive’a, dysku sieciowego albo pobierz darmowe gry.", color = K.muted, fontSize = 15.sp, lineHeight = 22.sp) }
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(files) { f ->
+                val folder = f.parentFile?.relativeTo(root)?.path?.ifBlank { null }
+                ListRow(f.name, listOfNotNull(RomFiles.formatSize(f.length()), folder).joinToString(" · ")) {
+                    if (confirm == f) {
+                        TvButton("Tak, usuń", primary = true, onClick = {
+                            f.delete()
+                            files = RomFiles.internalFiles(activity)
+                            confirm = null
+                            activity.rescan()
+                            toast("Usunięto ${f.name}")
+                        })
+                        TvButton("Anuluj", onClick = { confirm = null })
+                    } else {
+                        TvButton("Usuń", onClick = { confirm = f })
+                    }
+                }
+            }
+        }
+    }
+}

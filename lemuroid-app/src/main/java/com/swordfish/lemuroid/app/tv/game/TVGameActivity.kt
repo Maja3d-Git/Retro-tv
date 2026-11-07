@@ -6,14 +6,14 @@ import androidx.lifecycle.Lifecycle
 import com.swordfish.lemuroid.R
 import com.swordfish.lemuroid.app.shared.game.BaseGameActivity
 import com.swordfish.lemuroid.app.shared.game.BaseGameScreenViewModel
-import com.swordfish.lemuroid.app.tv.gamemenu.TVGameMenuActivity
+import com.swordfish.lemuroid.retrotv.game.RetroGameMenuActivity
 import com.swordfish.lemuroid.common.coroutines.launchOnState
 import com.swordfish.lemuroid.common.coroutines.safeCollect
 import com.swordfish.lemuroid.common.displayToast
 import kotlinx.coroutines.flow.filter
 
 class TVGameActivity : BaseGameActivity() {
-    override fun getDialogClass() = TVGameMenuActivity::class.java
+    override fun getDialogClass() = RetroGameMenuActivity::class.java
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

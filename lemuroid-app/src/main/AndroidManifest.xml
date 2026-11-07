@@ -135,6 +135,11 @@
             android:theme="@style/LemuroidMaterialTheme.Game" />
 
         <activity
+            android:name="com.swordfish.lemuroid.retrotv.game.RetroGameMenuActivity"
+            android:process=":game"
+            android:theme="@style/RetroTvGameMenuTheme" />
+
+        <activity
             android:name=".app.tv.gamemenu.TVGameMenuActivity"
             android:process=":game"
             android:theme="@style/LemuroidLeanbackPreferencesTheme" />

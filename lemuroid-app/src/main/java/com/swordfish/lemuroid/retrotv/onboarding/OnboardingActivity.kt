@@ -143,17 +143,13 @@ class OnboardingActivity : ComponentActivity() {
     ) {
         Title(
             "Skąd wziąć gry?",
-            "Wskaż folder z plikami gier (pamięć telewizora, pendrive) albo pobierz darmowe gry homebrew. " +
+            "Wskaż folder z plikami gier w pamięci telewizora albo na pendrivie. " +
                 "Więcej możliwości, w tym dysk sieciowy, znajdziesz później w „Gry i ROM-y”.",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Wybierz folder", primary = true, modifier = Modifier.focusRequester(focus), onClick = {
                 // Wbudowana przeglądarka folderów – wiele telewizorów nie ma systemowego okna wyboru.
                 startActivity(android.content.Intent(this@OnboardingActivity, com.swordfish.lemuroid.retrotv.roms.RomManagerActivity::class.java))
-                next()
-            })
-            TvButton("Darmowe gry", onClick = {
-                startActivity(Intent(this@OnboardingActivity, RomManagerActivity::class.java))
                 next()
             })
             TvButton("Później", onClick = next)

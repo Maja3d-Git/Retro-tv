@@ -1,0 +1,670 @@
+package com.swordfish.lemuroid.retrotv.home
+
+import android.content.Context
+import android.view.InputDevice
+import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.swordfish.lemuroid.app.shared.systems.MetaSystemInfo
+import com.swordfish.lemuroid.lib.library.GameSystem
+import com.swordfish.lemuroid.lib.library.MetaSystemID
+import com.swordfish.lemuroid.lib.library.db.entity.Game
+import com.swordfish.lemuroid.retrotv.ui.K
+import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
+import com.swordfish.lemuroid.retrotv.ui.TvButton
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import kotlin.math.abs
+
+/** Akcje ekranu głównego, realizowane przez MainTVActivity. */
+interface HomeActions {
+    fun play(game: Game)
+
+    fun restart(game: Game)
+
+    fun toggleFavorite(game: Game)
+
+    fun pickFolder()
+
+    fun rescan()
+
+    fun stopScan()
+
+    fun openEmulationSettings()
+
+    fun openControllers()
+
+    fun openSystem()
+}
+
+private sealed class Screen {
+    object Start : Screen()
+
+    data class Library(val meta: MetaSystemID) : Screen()
+}
+
+@Composable
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    busy: Boolean,
+    actions: HomeActions,
+) {
+    val state by viewModel.home.collectAsState()
+    val libraryGames by viewModel.libraryGames.collectAsState()
+    var screen by remember { mutableStateOf<Screen>(Screen.Start) }
+
+    fun open(s: Screen) {
+        screen = s
+        viewModel.selectedSystem.value = (s as? Screen.Library)?.meta
+    }
+
+    BackHandler(enabled = screen != Screen.Start) { open(Screen.Start) }
+
+    Box(Modifier.fillMaxSize().background(K.bg)) {
+        Row(Modifier.fillMaxSize()) {
+            Rail(state, screen, actions, onOpen = { open(it) })
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                when (val s = screen) {
+                    Screen.Start -> StartContent(state, actions, onOpenSystem = { open(Screen.Library(it)) })
+                    is Screen.Library -> LibraryContent(s.meta, state, libraryGames, actions)
+                }
+            }
+        }
+        if (busy) {
+            Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+                Text("Wczytywanie…", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+// ---------- menu boczne ----------
+
+@Composable
+private fun Rail(
+    state: HomeViewModel.HomeState,
+    screen: Screen,
+    actions: HomeActions,
+    onOpen: (Screen) -> Unit,
+) {
+    val context = LocalContext.current
+    Column(
+        Modifier
+            .width(220.dp)
+            .fillMaxHeight()
+            .background(K.nav)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(Modifier.padding(start = 10.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+            PadLogo(Modifier.size(30.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("RETRO TV", color = K.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+        }
+        RailItem("Start", screen == Screen.Start) { onOpen(Screen.Start) }
+
+        if (state.systems.isNotEmpty()) {
+            RailLabel("KONSOLE")
+            state.systems.forEach { info ->
+                val selected = (screen as? Screen.Library)?.meta == info.metaSystem
+                RailItem(info.getName(context), selected, count = info.count) { onOpen(Screen.Library(info.metaSystem)) }
+            }
+        }
+
+        RailLabel("BIBLIOTEKA")
+        RailItem("Dodaj folder z grami", false, onClick = actions::pickFolder)
+        if (state.scanning) {
+            RailItem("Zatrzymaj skanowanie", false, onClick = actions::stopScan)
+        } else {
+            RailItem("Skanuj ponownie", false, enabled = !state.indexing, onClick = actions::rescan)
+        }
+
+        RailLabel("USTAWIENIA")
+        RailItem("Kontrolery", false, onClick = actions::openControllers)
+        RailItem("Emulacja i ekran", false, onClick = actions::openEmulationSettings)
+        RailItem("System", false, onClick = actions::openSystem)
+    }
+}
+
+@Composable
+private fun RailLabel(text: String) {
+    Text(
+        text,
+        color = K.muted,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.5.sp,
+        modifier = Modifier.padding(start = 12.dp, top = 16.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun RailItem(
+    label: String,
+    selected: Boolean,
+    count: Int? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(42.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) K.p.activeBg else Color.Transparent)
+            .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(10.dp))
+            .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color =
+                when {
+                    selected -> K.p.activeFg
+                    !enabled -> K.line
+                    else -> K.text
+                },
+            fontSize = 15.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (count != null) {
+            Text("$count", color = if (selected) K.p.activeFg else K.muted, fontSize = 13.sp)
+        }
+    }
+}
+
+/** Logo z ikony aplikacji (ciemny pad). */
+@Composable
+fun PadLogo(modifier: Modifier) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF24242A)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("+", color = Color(0xFFECEAE5), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(3.dp))
+            Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFFFF7A70)))
+            Spacer(Modifier.width(2.dp))
+            Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF8E80F0)))
+        }
+    }
+}
+
+// ---------- pasek górny ----------
+
+@Composable
+private fun TopBar(
+    title: String,
+    subtitle: String?,
+    state: HomeViewModel.HomeState,
+) {
+    var now by remember { mutableStateOf(Date()) }
+    var pads by remember { mutableStateOf(countPads()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(15_000)
+            now = Date()
+            pads = countPads()
+        }
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+            if (subtitle != null) Text(subtitle, color = K.muted, fontSize = 14.sp)
+        }
+        if (state.indexing) Chip("Skanowanie biblioteki…", K.accent)
+        Spacer(Modifier.width(8.dp))
+        Chip(if (pads == 0) "Brak pada" else if (pads == 1) "1 pad" else "$pads pady", if (pads > 0) K.ok else K.muted)
+        Spacer(Modifier.width(8.dp))
+        Chip(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), null)
+    }
+}
+
+@Composable
+private fun Chip(
+    text: String,
+    dot: Color?,
+) {
+    Row(
+        Modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(K.card)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (dot != null) {
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(dot))
+            Spacer(Modifier.width(7.dp))
+        }
+        Text(text, color = K.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+private fun countPads(): Int =
+    InputDevice.getDeviceIds().toList()
+        .mapNotNull { InputDevice.getDevice(it) }
+        .filter { !it.isVirtual && (it.sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD) }
+        .distinctBy { it.descriptor }
+        .size
+
+// ---------- Start ----------
+
+@Composable
+private fun StartContent(
+    state: HomeViewModel.HomeState,
+    actions: HomeActions,
+    onOpenSystem: (MetaSystemID) -> Unit,
+) {
+    val firstFocus = remember { FocusRequester() }
+    val continueGame = state.continueGame
+    val empty = state.loaded && state.systems.isEmpty()
+    LaunchedEffect(continueGame?.id, empty) {
+        delay(50)
+        runCatching { firstFocus.requestFocus() }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 32.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        TopBar("Start", null, state)
+
+        if (empty) {
+            EmptyLibrary(state, actions, firstFocus)
+        }
+
+        if (!empty && continueGame != null) {
+            ContinueCard(continueGame, actions, firstFocus)
+        }
+
+        val recent = state.recent.filter { it.id != continueGame?.id }
+        if (recent.isNotEmpty()) GameRow("Ostatnio grane", recent, actions)
+        if (state.favorites.isNotEmpty()) GameRow("Ulubione", state.favorites, actions)
+
+        if (!empty && state.systems.isNotEmpty()) {
+            Text("Twoje konsole", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            val context = LocalContext.current
+            state.systems.chunked(3).forEachIndexed { rowIndex, rowItems ->
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    rowItems.forEachIndexed { i, info ->
+                        val focusMod =
+                            if (continueGame == null && rowIndex == 0 && i == 0) Modifier.focusRequester(firstFocus) else Modifier
+                        ConsoleCard(info, context, Modifier.weight(1f).then(focusMod)) { onOpenSystem(info.metaSystem) }
+                    }
+                    repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyLibrary(
+    state: HomeViewModel.HomeState,
+    actions: HomeActions,
+    focus: FocusRequester,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(K.card)
+            .padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        PadLogo(Modifier.size(56.dp))
+        Text(
+            if (state.indexing) "Szukam gier w wybranym folderze…" else "Dodaj swoje gry",
+            color = K.text,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = RetroTvTheme.display,
+        )
+        Text(
+            "Wskaż folder z plikami gier (ROM): w pamięci telewizora, na pendrivie albo na dysku sieciowym. " +
+                "Retro TV sam rozpozna konsole i pobierze okładki. Gry z podfolderów też zostaną znalezione.",
+            color = K.muted,
+            fontSize = 16.sp,
+            lineHeight = 23.sp,
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TvButton("Wybierz folder", primary = true, onClick = actions::pickFolder, modifier = Modifier.focusRequester(focus))
+            TvButton("Podłącz pada", onClick = actions::openControllers)
+        }
+    }
+}
+
+@Composable
+private fun ContinueCard(
+    game: Game,
+    actions: HomeActions,
+    focus: FocusRequester,
+) {
+    val context = LocalContext.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(190.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(K.card),
+    ) {
+        Cover(game, Modifier.width(260.dp).fillMaxHeight(), titleSize = 22)
+        Column(
+            Modifier.weight(1f).padding(horizontal = 26.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text("KONTYNUUJ GRĘ", color = K.coral, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                game.displayName(),
+                color = K.text,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = RetroTvTheme.display,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text("${systemName(context, game)} · ${lastPlayed(game)}", color = K.muted, fontSize = 14.sp)
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton("Graj", primary = true, onClick = { actions.play(game) }, modifier = Modifier.focusRequester(focus))
+                TvButton("Od nowa", onClick = { actions.restart(game) })
+                TvButton(if (game.isFavorite) "Usuń z ulubionych" else "Do ulubionych", onClick = { actions.toggleFavorite(game) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun GameRow(
+    title: String,
+    games: List<Game>,
+    actions: HomeActions,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, color = K.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
+            items(games, key = { it.id }) { game -> GameTile(game, actions, Modifier.width(150.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun ConsoleCard(
+    info: MetaSystemInfo,
+    context: Context,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    Column(
+        modifier
+            .height(70.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(K.card)
+            .border(3.dp, if (focused) K.coral else K.line.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(info.getName(context), color = K.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(gamesCount(info.count), color = K.muted, fontSize = 13.sp)
+    }
+}
+
+// ---------- Biblioteka ----------
+
+@Composable
+private fun LibraryContent(
+    meta: MetaSystemID,
+    state: HomeViewModel.HomeState,
+    games: List<Game>?,
+    actions: HomeActions,
+) {
+    val context = LocalContext.current
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(meta, games?.isNotEmpty()) {
+        delay(50)
+        runCatching { firstFocus.requestFocus() }
+    }
+    Column(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, top = 24.dp, bottom = 12.dp)) {
+        TopBar(context.getString(meta.titleResId), games?.let { gamesCount(it.size) }, state)
+        Spacer(Modifier.height(16.dp))
+        if (games == null) {
+            Text("Wczytywanie…", color = K.muted, fontSize = 16.sp)
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(140.dp),
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = PaddingValues(6.dp),
+            ) {
+                items(games, key = { it.id }) { game ->
+                    val mod = if (game.id == games.first().id) Modifier.focusRequester(firstFocus) else Modifier
+                    GameTile(game, actions, mod)
+                }
+            }
+        }
+        HintBar()
+    }
+}
+
+@Composable
+private fun HintBar() {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Hint("OK / A", "Graj")
+        Hint("Y / Menu", "Ulubiona")
+        Hint("Wstecz / B", "Start")
+    }
+}
+
+@Composable
+private fun Hint(
+    key: String,
+    label: String,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.clip(RoundedCornerShape(6.dp)).background(K.btn).padding(horizontal = 8.dp, vertical = 3.dp)) {
+            Text(key, color = K.text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(label, color = K.muted, fontSize = 13.sp)
+    }
+}
+
+// ---------- kafelek gry ----------
+
+@Composable
+private fun GameTile(
+    game: Game,
+    actions: HomeActions,
+    modifier: Modifier = Modifier,
+) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    Column(
+        modifier
+            .scale(if (focused) 1.05f else 1f)
+            .onPreviewKeyEvent { event ->
+                val code = event.nativeKeyEvent.keyCode
+                if ((code == KeyEvent.KEYCODE_BUTTON_Y || code == KeyEvent.KEYCODE_MENU) &&
+                    event.nativeKeyEvent.action == KeyEvent.ACTION_UP
+                ) {
+                    actions.toggleFavorite(game)
+                    true
+                } else {
+                    code == KeyEvent.KEYCODE_BUTTON_Y || code == KeyEvent.KEYCODE_MENU
+                }
+            }
+            .clickable(interactionSource = source, indication = null) { actions.play(game) },
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.75f)
+                .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+                .padding(3.dp)
+                .clip(RoundedCornerShape(10.dp)),
+        ) {
+            Cover(game, Modifier.fillMaxSize(), titleSize = 15)
+            if (game.isFavorite) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xCC24242A))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) { Text("★", color = Color(0xFFFFD43B), fontSize = 13.sp) }
+            }
+        }
+        Text(
+            game.displayName(),
+            color = K.text,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 16.sp,
+        )
+    }
+}
+
+/** Okładka gry albo kolorowy zastępnik z tytułem, gdy okładki brak. */
+@Composable
+private fun Cover(
+    game: Game,
+    modifier: Modifier,
+    titleSize: Int,
+) {
+    val tile = K.p.tiles[abs(game.title.hashCode()) % K.p.tiles.size]
+    Box(modifier.background(tile), contentAlignment = Alignment.BottomStart) {
+        Text(
+            game.displayName(),
+            color = Color.White,
+            fontSize = titleSize.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = RetroTvTheme.display,
+            lineHeight = (titleSize + 3).sp,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(12.dp),
+        )
+        val url = game.displayCoverUrl()
+        if (url != null) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+// ---------- pomocnicze ----------
+
+private fun systemName(
+    context: Context,
+    game: Game,
+): String = runCatching { context.getString(GameSystem.findById(game.systemId).shortTitleResId) }.getOrDefault(game.systemId)
+
+private fun gamesCount(n: Int): String {
+    val word =
+        when {
+            n == 1 -> "gra"
+            n % 10 in 2..4 && n % 100 !in 12..14 -> "gry"
+            else -> "gier"
+        }
+    return "$n $word"
+}
+
+private fun lastPlayed(game: Game): String {
+    val t = game.lastPlayedAt ?: return "jeszcze nie grano"
+    val then = Calendar.getInstance().apply { timeInMillis = t }
+    val now = Calendar.getInstance()
+    val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(t))
+    val days =
+        ((now.apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0) }.timeInMillis -
+            then.apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0) }.timeInMillis) /
+            86_400_000L).toInt()
+    return when {
+        days <= 0 -> "dziś, $time"
+        days == 1 -> "wczoraj, $time"
+        days < 7 -> "$days dni temu"
+        else -> SimpleDateFormat("d MMM yyyy", Locale("pl")).format(Date(t))
+    }
+}

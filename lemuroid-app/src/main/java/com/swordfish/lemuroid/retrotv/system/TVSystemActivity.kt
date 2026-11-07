@@ -62,24 +62,20 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
 
-/** Kolory ciemnego motywu "Kartridż". */
-private object K {
-    val bg = Color(0xFF24242A)
-    val nav = Color(0xFF1C1C21)
-    val card = Color(0xFF2F2F36)
-    val line = Color(0xFF3D3D46)
-    val btn = Color(0xFF3A3A42)
-    val text = Color(0xFFECEAE5)
-    val muted = Color(0xFFA8A5B2)
-    val accent = Color(0xFF8E80F0)
-    val onAccent = Color(0xFF140F33)
-    val coral = Color(0xFFFF7A70)
-    val ok = Color(0xFF6BD39A)
-    val warn = Color(0xFFE8B04A)
-}
+import com.swordfish.lemuroid.retrotv.ui.InfoRow
+import com.swordfish.lemuroid.retrotv.ui.K
+import com.swordfish.lemuroid.retrotv.ui.Panel
+import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
+import com.swordfish.lemuroid.retrotv.ui.SectionTitle
+import com.swordfish.lemuroid.retrotv.ui.TvButton
+import com.swordfish.lemuroid.retrotv.ui.TvToggle
+import com.swordfish.lemuroid.retrotv.ui.TvChoice
+import com.swordfish.lemuroid.retrotv.ui.ThemeMode
+import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 
 private enum class Section(val title: String) {
     UPDATES("Aktualizacje"),
+    APPEARANCE("Wygląd"),
     NETWORK("Połączenie"),
     CONTROLLERS("Kontrolery"),
     LOGS("Dziennik"),
@@ -89,6 +85,14 @@ private enum class Section(val title: String) {
 class TVSystemActivity : ComponentActivity() {
     companion object {
         const val EXTRA_START_UPDATE = "retrotv.start_update"
+        const val EXTRA_SECTION = "retrotv.section"
+
+        fun launchSection(
+            context: Context,
+            section: String,
+        ) {
+            context.startActivity(Intent(context, TVSystemActivity::class.java).putExtra(EXTRA_SECTION, section))
+        }
 
         fun launchUpdate(context: Context) {
             context.startActivity(
@@ -99,122 +103,10 @@ class TVSystemActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RetroTvTheme.apply(this)
         val startUpdate = savedInstanceState == null && intent.getBooleanExtra(EXTRA_START_UPDATE, false)
-        setContent { SystemScreen(this, startUpdate) }
-    }
-}
-
-// ---------- wspólne elementy ----------
-
-@Composable
-private fun TvButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    primary: Boolean = false,
-    enabled: Boolean = true,
-) {
-    val source = remember { MutableInteractionSource() }
-    val focused by source.collectIsFocusedAsState()
-    val bg =
-        when {
-            !enabled -> K.card
-            primary -> K.accent
-            else -> K.btn
-        }
-    val fg =
-        when {
-            !enabled -> K.muted
-            primary -> K.onAccent
-            else -> K.text
-        }
-    Box(
-        modifier =
-            modifier
-                .height(48.dp)
-                .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(26.dp))
-                .padding(3.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(bg)
-                .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
-                .padding(horizontal = 18.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
-    }
-}
-
-@Composable
-private fun TvToggle(
-    label: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-) {
-    val source = remember { MutableInteractionSource() }
-    val focused by source.collectIsFocusedAsState()
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(if (focused) K.btn else Color.Transparent)
-                .border(2.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
-                .clickable(interactionSource = source, indication = null) { onChange(!checked) }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = K.text, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        Box(
-            modifier =
-                Modifier
-                    .size(width = 48.dp, height = 28.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (checked) K.accent else K.line),
-            contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
-        ) {
-            Box(
-                Modifier
-                    .padding(3.dp)
-                    .size(22.dp)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(if (checked) Color.White else K.muted),
-            )
-        }
-    }
-}
-
-@Composable
-private fun InfoRow(
-    label: String,
-    value: String,
-    valueColor: Color = K.text,
-) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Text(label, color = K.muted, fontSize = 15.sp, modifier = Modifier.width(200.dp))
-        Text(value, color = valueColor, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-private fun Panel(content: @Composable () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(K.card)
-            .padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) { content() }
-}
-
-@Composable
-private fun SectionTitle(
-    title: String,
-    subtitle: String? = null,
-) {
-    Column(Modifier.padding(bottom = 14.dp)) {
-        Text(title, color = K.text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        if (subtitle != null) Text(subtitle, color = K.muted, fontSize = 15.sp)
+        val initial = Section.values().firstOrNull { it.name == intent.getStringExtra(EXTRA_SECTION) } ?: Section.UPDATES
+        setContent { RetroTvContent { SystemScreen(this, startUpdate, initial) } }
     }
 }
 
@@ -224,8 +116,9 @@ private fun SectionTitle(
 private fun SystemScreen(
     activity: ComponentActivity,
     startUpdate: Boolean,
+    initial: Section,
 ) {
-    var section by remember { mutableStateOf(Section.UPDATES) }
+    var section by remember { mutableStateOf(initial) }
     val firstTab = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstTab.requestFocus() } }
 
@@ -243,6 +136,7 @@ private fun SystemScreen(
                 color = K.text,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = RetroTvTheme.display,
                 modifier = Modifier.padding(start = 12.dp, bottom = 4.dp),
             )
             Text("System", color = K.muted, fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp, bottom = 20.dp))
@@ -254,10 +148,10 @@ private fun SystemScreen(
                     Modifier
                         .fillMaxWidth()
                         .height(48.dp)
-                        .then(if (index == 0) Modifier.focusRequester(firstTab) else Modifier)
+                        .then(if (s == initial) Modifier.focusRequester(firstTab) else Modifier)
                         .onFocusChanged { if (it.isFocused) section = s }
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (selected) K.text else Color.Transparent)
+                        .background(if (selected) K.p.activeBg else Color.Transparent)
                         .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
                         .clickable(interactionSource = source, indication = null) { section = s }
                         .padding(horizontal = 14.dp),
@@ -265,7 +159,7 @@ private fun SystemScreen(
                 ) {
                     Text(
                         s.title,
-                        color = if (selected) K.bg else K.muted,
+                        color = if (selected) K.p.activeFg else K.muted,
                         fontSize = 16.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                     )
@@ -283,6 +177,7 @@ private fun SystemScreen(
         Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 32.dp, vertical = 28.dp)) {
             when (section) {
                 Section.UPDATES -> UpdatesSection(activity, startUpdate)
+                Section.APPEARANCE -> AppearanceSection(activity)
                 Section.NETWORK -> NetworkSection()
                 Section.CONTROLLERS -> ControllersSection()
                 Section.LOGS -> LogsSection()
@@ -449,6 +344,32 @@ private fun UpdatesSection(
                 RetroTvPrefs.setAutoUpdateCheck(activity, it)
             }
         }
+    }
+}
+
+// ---------- Wygląd ----------
+
+@Composable
+private fun AppearanceSection(activity: ComponentActivity) {
+    val current = remember { RetroTvTheme.mode(activity) }
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SectionTitle("Wygląd", "Motyw Kartridż: jasny plastik albo grafitowa obudowa")
+        Panel {
+            ThemeMode.values().forEach { mode ->
+                TvChoice(mode.label, mode == current) {
+                    if (mode != current) {
+                        RetroTvTheme.setMode(activity, mode)
+                        activity.intent.putExtra(TVSystemActivity.EXTRA_SECTION, Section.APPEARANCE.name)
+                        activity.recreate()
+                    }
+                }
+            }
+        }
+        Text(
+            "Tryb automatyczny włącza ciemny motyw między 19:00 a 7:00.",
+            color = K.muted,
+            fontSize = 14.sp,
+        )
     }
 }
 
@@ -682,7 +603,8 @@ private fun AboutSection() {
             Text(
                 "Retro TV jest oprogramowaniem wolnym na licencji GNU GPL v3. " +
                     "Bazuje na aplikacji Lemuroid (Filippo Scognamiglio, GPLv3) i korzysta z rdzeni emulatorów libretro, " +
-                    "z których każdy ma własną licencję. Aplikacja nie zawiera żadnych gier.",
+                    "z których każdy ma własną licencję. Czcionki Chakra Petch i Rubik: SIL Open Font License. " +
+                    "Aplikacja nie zawiera żadnych gier.",
                 color = K.muted,
                 fontSize = 15.sp,
                 lineHeight = 22.sp,

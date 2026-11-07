@@ -34,6 +34,19 @@ import com.swordfish.lemuroid.lib.injection.PerFragment
 import com.swordfish.lemuroid.lib.library.covers.CustomCoverManager
 import com.swordfish.lemuroid.lib.library.db.RetrogradeDatabase
 import com.swordfish.lemuroid.retrotv.update.UpdatePrompt
+import androidx.activity.compose.setContent
+import com.swordfish.lemuroid.app.shared.library.LibraryIndexScheduler
+import com.swordfish.lemuroid.app.shared.settings.StorageFrameworkPickerLauncher
+import com.swordfish.lemuroid.app.tv.folderpicker.TVFolderPickerLauncher
+import com.swordfish.lemuroid.app.tv.settings.TVSettingsActivity
+import com.swordfish.lemuroid.lib.library.db.entity.Game
+import com.swordfish.lemuroid.retrotv.home.HomeActions
+import com.swordfish.lemuroid.retrotv.home.HomeScreen
+import com.swordfish.lemuroid.retrotv.home.HomeViewModel
+import com.swordfish.lemuroid.retrotv.system.TVSystemActivity
+import com.swordfish.lemuroid.retrotv.ui.Palette
+import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
+import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
 import dagger.Provides
 import dagger.android.ContributesAndroidInjector
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -51,16 +64,29 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
     override fun isBusy(): Boolean = mainViewModel?.inProgress?.value ?: false
 
+    @Inject
+    lateinit var retrogradeDb: RetrogradeDatabase
+
+    @Inject
+    lateinit var gameInteractor: GameInteractor
+
+    private var appliedPalette: Palette? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_tv_main)
+        RetroTvTheme.apply(this)
+        appliedPalette = RetroTvTheme.palette
 
         val factory = MainTVViewModel.Factory(applicationContext)
         mainViewModel = ViewModelProvider(this, factory).get(MainTVViewModel::class.java)
 
-        launchOnState(Lifecycle.State.CREATED) {
-            mainViewModel?.inProgress?.safeCollect {
-                findViewById<View>(R.id.tv_loading).isVisible = it
+        // Retro TV: nowy ekran główny w Compose zamiast interfejsu Leanback.
+        val homeViewModel =
+            ViewModelProvider(this, HomeViewModel.Factory(retrogradeDb, applicationContext))
+                .get(HomeViewModel::class.java)
+        setContent {
+            RetroTvContent {
+                HomeScreen(homeViewModel, busy = false, actions = homeActions)
             }
         }
 
@@ -68,6 +94,46 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
         UpdatePrompt.checkOnStart(this, lifecycleScope)
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Motyw mógł zostać zmieniony w ekranie System albo minęła godzina trybu automatycznego.
+        RetroTvTheme.apply(this)
+        if (appliedPalette != null && appliedPalette != RetroTvTheme.palette) {
+            recreate()
+        }
+    }
+
+    private val homeActions =
+        object : HomeActions {
+            override fun play(game: Game) = gameInteractor.onGamePlay(game)
+
+            override fun restart(game: Game) = gameInteractor.onGameRestart(game)
+
+            override fun toggleFavorite(game: Game) = gameInteractor.onFavoriteToggle(game, !game.isFavorite)
+
+            override fun pickFolder() {
+                if (TVHelper.isSAFSupported(this@MainTVActivity)) {
+                    StorageFrameworkPickerLauncher.pickFolder(this@MainTVActivity)
+                } else {
+                    TVFolderPickerLauncher.pickFolder(this@MainTVActivity)
+                }
+            }
+
+            override fun rescan() = LibraryIndexScheduler.scheduleLibrarySync(applicationContext)
+
+            override fun stopScan() = LibraryIndexScheduler.cancelLibrarySync(applicationContext)
+
+            override fun openEmulationSettings() {
+                startActivity(Intent(this@MainTVActivity, TVSettingsActivity::class.java))
+            }
+
+            override fun openControllers() = TVSystemActivity.launchSection(this@MainTVActivity, "CONTROLLERS")
+
+            override fun openSystem() {
+                startActivity(Intent(this@MainTVActivity, TVSystemActivity::class.java))
+            }
+        }
 
     override fun onActivityResult(
         requestCode: Int,

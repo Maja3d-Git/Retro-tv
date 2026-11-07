@@ -63,30 +63,32 @@ class PhoneHomeActivity : ComponentActivity() {
             )
         }
 
-    /** Skanuje kod QR z ekranu telewizora (skaner Google, bez uprawnienia do aparatu) i otwiera pad. */
-    private fun scanQr(onError: (String) -> Unit) {
-        val options =
-            com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
-                .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
-                .build()
-        try {
-            com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(this, options).startScan()
-                .addOnSuccessListener { barcode ->
-                    val raw = barcode.rawValue ?: return@addOnSuccessListener onError("Nie odczytano kodu.")
-                    val uri = android.net.Uri.parse(raw)
-                    val k = uri.getQueryParameter("k")
-                    if (k.isNullOrBlank() || uri.host.isNullOrBlank()) return@addOnSuccessListener onError("To nie jest kod z Retro TV.")
-                    val port = if (uri.port > 0) uri.port else com.swordfish.lemuroid.retrotv.pad.PhonePadServer.HTTP_PORT
-                    prefs.edit().putString("code", k.lowercase()).putString("last_host", "${uri.host}:$port").apply()
-                    PhonePadActivity.start(this, k.lowercase())
-                }
-                .addOnFailureListener { e ->
-                    timber.log.Timber.w(e, "Skaner QR niedostępny")
-                    onError("Skaner niedostępny na tym telefonie – wpisz kod ręcznie.")
-                }
-        } catch (e: Exception) {
-            onError("Skaner niedostępny na tym telefonie – wpisz kod ręcznie.")
+    private var onScanError: ((String) -> Unit)? = null
+
+    private val qrScanner =
+        registerForActivityResult(com.journeyapps.barcodescanner.ScanContract()) { result ->
+            val raw = result.contents ?: return@registerForActivityResult
+            val uri = android.net.Uri.parse(raw)
+            val k = uri.getQueryParameter("k")
+            if (k.isNullOrBlank() || uri.host.isNullOrBlank()) {
+                onScanError?.invoke("To nie jest kod z Retro TV.")
+                return@registerForActivityResult
+            }
+            val port = if (uri.port > 0) uri.port else com.swordfish.lemuroid.retrotv.pad.PhonePadServer.HTTP_PORT
+            prefs.edit().putString("code", k.lowercase()).putString("last_host", "${uri.host}:$port").apply()
+            PhonePadActivity.start(this, k.lowercase())
         }
+
+    /** Skanuje kod QR z ekranu telewizora i od razu otwiera pad. */
+    private fun scanQr(onError: (String) -> Unit) {
+        onScanError = onError
+        val options =
+            com.journeyapps.barcodescanner.ScanOptions()
+                .setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.QR_CODE)
+                .setPrompt("Zeskanuj kod QR z ekranu Kontrolery na telewizorze")
+                .setBeepEnabled(false)
+                .setOrientationLocked(false)
+        runCatching { qrScanner.launch(options) }.onFailure { onError("Nie udało się uruchomić aparatu – wpisz kod ręcznie.") }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

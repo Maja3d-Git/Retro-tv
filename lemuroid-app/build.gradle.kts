@@ -224,7 +224,7 @@ dependencies {
     implementation(deps.libs.composeHtmlText)
 
     implementation("com.google.zxing:core:3.5.3")
-    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0") { isTransitive = false }
     implementation("org.java-websocket:Java-WebSocket:1.5.7")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
     implementation("io.getstream:stream-webrtc-android:1.1.1")

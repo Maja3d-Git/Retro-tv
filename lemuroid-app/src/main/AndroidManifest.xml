@@ -159,6 +159,10 @@
             android:theme="@style/LemuroidMaterialTheme" />
 
         <activity
+            android:name="com.swordfish.lemuroid.retrotv.onboarding.OnboardingActivity"
+            android:theme="@style/LemuroidMaterialTheme" />
+
+        <activity
             android:name="com.swordfish.lemuroid.retrotv.roms.RomManagerActivity"
             android:theme="@style/LemuroidMaterialTheme"
             android:windowSoftInputMode="adjustResize" />

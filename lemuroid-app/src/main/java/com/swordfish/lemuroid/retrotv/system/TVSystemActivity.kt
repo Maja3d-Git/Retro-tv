@@ -608,7 +608,7 @@ private fun LogLineRow(line: RetroTvLog.Line) {
 }
 
 @Composable
-private fun QrImage(
+fun QrImage(
     text: String,
     modifier: Modifier,
 ) {

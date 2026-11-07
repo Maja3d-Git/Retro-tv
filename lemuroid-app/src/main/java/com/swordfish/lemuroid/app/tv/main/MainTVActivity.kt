@@ -44,6 +44,7 @@ import com.swordfish.lemuroid.retrotv.home.HomeActions
 import com.swordfish.lemuroid.retrotv.home.HomeScreen
 import com.swordfish.lemuroid.retrotv.home.HomeViewModel
 import com.swordfish.lemuroid.retrotv.home.PlayStats
+import com.swordfish.lemuroid.retrotv.onboarding.OnboardingActivity
 import com.swordfish.lemuroid.retrotv.roms.RomFiles
 import com.swordfish.lemuroid.retrotv.roms.RomManagerActivity
 import android.net.Uri
@@ -99,7 +100,11 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
         ensureLegacyStoragePermissionsIfNeeded()
 
-        UpdatePrompt.checkOnStart(this, lifecycleScope)
+        if (savedInstanceState == null && OnboardingActivity.shouldShow(this)) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+        } else {
+            UpdatePrompt.checkOnStart(this, lifecycleScope)
+        }
     }
 
     override fun onResume() {

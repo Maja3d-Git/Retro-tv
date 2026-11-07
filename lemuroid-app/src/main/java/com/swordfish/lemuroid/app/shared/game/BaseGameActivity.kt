@@ -124,6 +124,14 @@ abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
 
         lifecycle.addObserver(baseGameScreenViewModel)
 
+        // Retro TV: gra uruchomiona z pokoju („Z drużyną”) – od razu prosimy o zgodę na przesyłanie obrazu.
+        if (savedInstanceState == null && com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.state.value.lobby) {
+            runCatching {
+                val manager = getSystemService(android.media.projection.MediaProjectionManager::class.java)
+                startActivityForResult(manager.createScreenCaptureIntent(), NETPLAY_PROJECTION_REQUEST)
+            }
+        }
+
         setContent {
             AppTheme {
                 BaseGameScreen(viewModel = baseGameScreenViewModel) {

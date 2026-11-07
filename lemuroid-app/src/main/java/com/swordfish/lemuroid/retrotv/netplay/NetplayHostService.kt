@@ -39,6 +39,8 @@ data class NetplayState(
     val online: Boolean = false,
     val guests: List<NetplayGuest> = emptyList(),
     val error: String? = null,
+    /** Poczekalnia przed startem gry: goście dołączają, obraz jeszcze nie jest wysyłany. */
+    val lobby: Boolean = false,
 )
 
 /**
@@ -50,6 +52,7 @@ class NetplayHostService : Service() {
     companion object {
         private const val EXTRA_PROJECTION = "projection"
         private const val EXTRA_TITLE = "title"
+        private const val EXTRA_LOBBY = "lobby"
         private const val CHANNEL = "retrotv_netplay"
         private const val NOTIFICATION_ID = 7341
 
@@ -76,6 +79,14 @@ class NetplayHostService : Service() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
         }
 
+        /** Otwiera pokój przed uruchomieniem gry (bez przechwytywania obrazu). */
+        fun openLobby(
+            context: Context,
+            title: String,
+        ) {
+            context.startService(Intent(context, NetplayHostService::class.java).putExtra(EXTRA_LOBBY, true).putExtra(EXTRA_TITLE, title))
+        }
+
         fun stop(context: Context) {
             context.stopService(Intent(context, NetplayHostService::class.java))
         }
@@ -90,6 +101,7 @@ class NetplayHostService : Service() {
     private var track: VideoTrack? = null
     private var signaling: Signaling? = null
     private val peers = mutableMapOf<String, Peer>()
+    private val waiting = linkedMapOf<String, NetplayGuest>()
     private var code = ""
 
     private inner class Peer(val guest: NetplayGuest, val pc: PeerConnection) {
@@ -103,6 +115,15 @@ class NetplayHostService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
+        if (intent?.getBooleanExtra(EXTRA_LOBBY, false) == true) {
+            if (signaling == null) {
+                code = Netplay.newCode()
+                stateFlow.value = NetplayState(active = true, lobby = true, code = code)
+                startSignaling()
+                Timber.i("Netplay: poczekalnia %s otwarta", code)
+            }
+            return START_NOT_STICKY
+        }
         if (factory != null) return START_NOT_STICKY
         val projection: Intent? =
             if (Build.VERSION.SDK_INT >= 33) {
@@ -115,7 +136,7 @@ class NetplayHostService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        code = Netplay.newCode()
+        if (code.isEmpty()) code = Netplay.newCode()
         goForeground(intent?.getStringExtra(EXTRA_TITLE) ?: "Retro TV")
         try {
             startCapture(projection)
@@ -125,7 +146,17 @@ class NetplayHostService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        stateFlow.value = NetplayState(active = true, code = code)
+        stateFlow.value = stateFlow.value.copy(active = true, lobby = false, code = code, error = null)
+        if (signaling == null) startSignaling()
+        // Goście z poczekalni dostają teraz obraz gry.
+        val ready = waiting.values.toList()
+        waiting.clear()
+        ready.forEach { onJoin(it.id, it.name) }
+        Timber.i("Netplay: pokój %s gra (gości z poczekalni: %d)", code, ready.size)
+        return START_NOT_STICKY
+    }
+
+    private fun startSignaling() {
         signaling =
             Signaling(
                 clientId = "host-$code",
@@ -133,8 +164,6 @@ class NetplayHostService : Service() {
                 onMessage = { json -> main.post { onSignal(json) } },
                 onState = { online -> main.post { stateFlow.value = stateFlow.value.copy(online = online) } },
             ).also { it.connect() }
-        Timber.i("Netplay: pokój %s utworzony", code)
-        return START_NOT_STICKY
     }
 
     private fun goForeground(title: String) {
@@ -184,7 +213,10 @@ class NetplayHostService : Service() {
         when (json.optString("type")) {
             "join" -> onJoin(from, json.optString("name", "Gość").take(30))
             "answer" -> peers[from]?.pc?.setRemoteDescription(SimpleSdpObserver(), SessionDescription(SessionDescription.Type.ANSWER, json.optString("sdp")))
-            "bye" -> removePeer(from)
+            "bye" -> {
+                if (waiting.remove(from) != null) publishGuests()
+                removePeer(from)
+            }
         }
     }
 
@@ -193,6 +225,20 @@ class NetplayHostService : Service() {
         name: String,
     ) {
         if (guestId.isBlank()) return
+        if (factory == null) {
+            // Poczekalnia: zapisujemy gościa i prosimy, żeby czekał na start gry.
+            if (!waiting.containsKey(guestId) && waiting.size >= Netplay.MAX_GUESTS) {
+                signaling?.send(Netplay.guestTopic(code, guestId), JSONObject().put("type", "full"))
+                return
+            }
+            val taken = waiting.filterKeys { it != guestId }.values.map { it.player }.toSet()
+            val player = (firstGuestPlayer until firstGuestPlayer + 8).first { it !in taken }
+            waiting[guestId] = NetplayGuest(guestId, name, player, false)
+            signaling?.send(Netplay.guestTopic(code, guestId), JSONObject().put("type", "wait").put("player", player))
+            publishGuests()
+            Timber.i("Netplay: %s czeka w poczekalni", name)
+            return
+        }
         removePeer(guestId)
         if (peers.size >= Netplay.MAX_GUESTS) {
             signaling?.send(Netplay.guestTopic(code, guestId), JSONObject().put("type", "full"))
@@ -294,10 +340,12 @@ class NetplayHostService : Service() {
     }
 
     private fun publishGuests() {
-        stateFlow.value = stateFlow.value.copy(guests = peers.values.map { it.guest }.sortedBy { it.player })
+        stateFlow.value = stateFlow.value.copy(guests = (peers.values.map { it.guest } + waiting.values).sortedBy { it.player })
     }
 
     override fun onDestroy() {
+        waiting.keys.forEach { id -> signaling?.send(Netplay.guestTopic(code, id), JSONObject().put("type", "bye")) }
+        waiting.clear()
         peers.keys.toList().forEach { id ->
             signaling?.send(Netplay.guestTopic(code, id), JSONObject().put("type", "bye"))
             removePeer(id)

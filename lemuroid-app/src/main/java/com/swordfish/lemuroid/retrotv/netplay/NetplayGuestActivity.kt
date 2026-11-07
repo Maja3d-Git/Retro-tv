@@ -71,6 +71,7 @@ class NetplayGuestActivity : ComponentActivity() {
 
     private var status by mutableStateOf<String?>(null)
     private var streaming by mutableStateOf(false)
+    private var inLobby = false
     private var codeInput by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -170,7 +171,7 @@ class NetplayGuestActivity : ComponentActivity() {
                                 Netplay.hostTopic(code),
                                 JSONObject().put("type", "join").put("from", guestId).put("name", Build.MODEL ?: "Retro TV"),
                             )
-                            main.postDelayed({ if (!streaming && pc == null) status = "Brak odpowiedzi. Sprawdź kod i czy gospodarz ma otwarty pokój." }, 15_000)
+                            main.postDelayed({ if (!streaming && pc == null && !inLobby) status = "Brak odpowiedzi. Sprawdź kod i czy gospodarz ma otwarty pokój." }, 15_000)
                         }
                     }
                 },
@@ -181,6 +182,10 @@ class NetplayGuestActivity : ComponentActivity() {
         when (json.optString("type")) {
             "offer" -> onOffer(json.optString("sdp"))
             "full" -> status = "Pokój jest pełny."
+            "wait" -> {
+                inLobby = true
+                status = "Jesteś w pokoju jako gracz ${json.optInt("player", 2)}. Gra zacznie się, gdy gospodarz ją uruchomi."
+            }
             "bye" -> {
                 status = "Gospodarz zamknął pokój."
                 streaming = false

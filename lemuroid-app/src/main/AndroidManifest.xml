@@ -145,6 +145,12 @@
             android:process=":game"
             android:theme="@style/LemuroidMaterialTheme.Game" />
 
+        <activity
+            android:name="com.swordfish.lemuroid.retrotv.netplay.NetplayLobbyActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation"
+            android:process=":game"
+            android:theme="@style/LemuroidMaterialTheme" />
         <service
             android:name="com.swordfish.lemuroid.retrotv.netplay.NetplayHostService"
             android:exported="false"

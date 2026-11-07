@@ -61,6 +61,9 @@ import javax.inject.Inject
 
 @OptIn(DelicateCoroutinesApi::class)
 class MainTVActivity : BaseTVActivity(), BusyActivity {
+    private var pendingTeamGame: Game? = null
+    private val REQUEST_LOBBY = 4801
+
     @Inject
     lateinit var gameLaunchTaskHandler: GameLaunchTaskHandler
 
@@ -122,6 +125,14 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
         object : HomeActions {
             override fun play(game: Game) = gameInteractor.onGamePlay(game)
 
+            override fun playTeam(game: Game) {
+                pendingTeamGame = game
+                startActivityForResult(
+                    com.swordfish.lemuroid.retrotv.netplay.NetplayLobbyActivity.intent(this@MainTVActivity, game.title),
+                    REQUEST_LOBBY,
+                )
+            }
+
             override fun restart(game: Game) = gameInteractor.onGameRestart(game)
 
             override fun toggleFavorite(game: Game) = gameInteractor.onFavoriteToggle(game, !game.isFavorite)
@@ -174,6 +185,12 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
         super.onActivityResult(requestCode, resultCode, data)
 
         when (requestCode) {
+            REQUEST_LOBBY -> {
+                // „Rozpocznij grę” albo „Graj sam” w pokoju – uruchamiamy grę (pokój czeka w procesie gry).
+                val game = pendingTeamGame
+                pendingTeamGame = null
+                if (resultCode == Activity.RESULT_OK && game != null) gameInteractor.onGamePlay(game)
+            }
             BaseGameActivity.REQUEST_PLAY_GAME -> {
                 if (resultCode == Activity.RESULT_OK && data != null) {
                     val played = data.getSerializableExtra(BaseGameActivity.PLAY_GAME_RESULT_GAME) as? Game

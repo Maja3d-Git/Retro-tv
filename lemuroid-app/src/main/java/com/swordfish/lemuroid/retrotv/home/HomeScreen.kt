@@ -83,6 +83,9 @@ import kotlin.math.abs
 interface HomeActions {
     fun play(game: Game)
 
+    /** Pokój przed startem gry – goście dołączają, a gra rusza po ich wejściu. */
+    fun playTeam(game: Game)
+
     fun restart(game: Game)
 
     fun toggleFavorite(game: Game)
@@ -470,6 +473,7 @@ private fun ContinueCard(
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TvButton("Graj", primary = true, onClick = { actions.play(game) }, modifier = Modifier.focusRequester(focus))
+                TvButton("Z drużyną", onClick = { actions.playTeam(game) })
                 TvButton("Od nowa", onClick = { actions.restart(game) })
                 TvButton("Szczegóły", onClick = { onDetails(game) })
             }
@@ -726,6 +730,7 @@ private fun DetailsContent(
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TvButton("Graj", primary = true, onClick = { actions.play(game) }, modifier = Modifier.focusRequester(focus))
+                    TvButton("Z drużyną", onClick = { actions.playTeam(game) })
                     TvButton("Od nowa", onClick = { actions.restart(game) })
                     TvButton(if (game.isFavorite) "Usuń z ulubionych" else "Do ulubionych", onClick = { actions.toggleFavorite(game) })
                 }

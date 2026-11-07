@@ -93,12 +93,13 @@ $("#go").onclick=()=>{
     client.subscribe("retrotv/v1/"+code+"/guest/"+id,{qos:1});
     client.publish("retrotv/v1/"+code+"/host",JSON.stringify({type:"join",from:id,name:"Przeglądarka"}),{qos:1});
     status("Czekam na odpowiedź gospodarza…");
-    setTimeout(()=>{if(!pc){status("Brak odpowiedzi. Sprawdź kod i czy gospodarz ma otwarty pokój.");$("#go").disabled=false}},15000);
+    setTimeout(()=>{if(!pc&&!window.inLobby){status("Brak odpowiedzi. Sprawdź kod i czy gospodarz ma otwarty pokój.");$("#go").disabled=false}},15000);
   });
   client.on("error",()=>{status("Nie udało się połączyć z serwerem.");$("#go").disabled=false});
   client.on("message",(t,m)=>{let j;try{j=JSON.parse(m.toString())}catch(e){return}
     if(j.type==="offer")onOffer(j);
     else if(j.type==="full"){status("Pokój jest pełny.");$("#go").disabled=false}
+    else if(j.type==="wait"){window.inLobby=true;status("Jesteś w pokoju jako gracz "+(j.player||2)+". Gra zacznie się, gdy gospodarz ją uruchomi.")}
     else if(j.type==="bye"){alert("Gospodarz zamknął pokój.");location.reload()}});
 };
 async function onOffer(j){

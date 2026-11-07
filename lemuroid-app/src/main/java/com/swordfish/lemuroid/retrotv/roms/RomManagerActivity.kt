@@ -69,6 +69,7 @@ private enum class RomSection(val title: String) {
     USB("Import z pendrive’a"),
     NAS("Dysk sieciowy"),
     HOMEBREW("Darmowe gry"),
+    ARCHIVE("Archive.org"),
     LINK("Z linku"),
     STORAGE("Pamięć telewizora"),
 }
@@ -141,6 +142,7 @@ private fun RomManagerScreen(activity: RomManagerActivity) {
                     RomSection.USB -> UsbSection(activity, { job = it }) { message = it }
                     RomSection.NAS -> NasSection(activity, { job = it }) { message = it }
                     RomSection.HOMEBREW -> HomebrewSection(activity, { job = it }) { message = it }
+                    RomSection.ARCHIVE -> ArchiveSection(activity, { job = it }) { message = it }
                     RomSection.LINK -> LinkSection(activity, { job = it }) { message = it }
                     RomSection.STORAGE -> StorageSection(activity) { message = it }
                 }
@@ -599,6 +601,138 @@ private fun markInstalled(
     val prefs = context.getSharedPreferences("retrotv", Context.MODE_PRIVATE)
     val set = (prefs.getStringSet("homebrew_installed", emptySet()) ?: emptySet()) + repo
     prefs.edit().putStringSet("homebrew_installed", set).apply()
+}
+
+// ---------- Archive.org ----------
+
+@Composable
+private fun ArchiveSection(
+    activity: RomManagerActivity,
+    setJob: (Job?) -> Unit,
+    toast: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("homebrew nes") }
+    var results by remember { mutableStateOf<List<ArchiveSearch.Item>?>(null) }
+    var opened by remember { mutableStateOf<ArchiveSearch.Item?>(null) }
+    var files by remember { mutableStateOf<List<ArchiveSearch.FileEntry>?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        com.swordfish.lemuroid.retrotv.pad.PhonePadText.listener = { query = it }
+        onDispose { com.swordfish.lemuroid.retrotv.pad.PhonePadText.listener = null }
+    }
+
+    fun search() {
+        loading = true
+        error = null
+        opened = null
+        files = null
+        scope.launch {
+            try {
+                results = ArchiveSearch.search(query)
+            } catch (e: Exception) {
+                Timber.w(e, "Wyszukiwanie archive.org nie powiodło się")
+                error = "Nie udało się wyszukać: ${e.message}"
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionTitle("Archive.org", "Darmowe gry oznaczone jako domena publiczna albo Creative Commons")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                query,
+                { query = it },
+                label = { Text("Szukaj (np. homebrew snes, platformer gba)") },
+                singleLine = true,
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = K.text,
+                        unfocusedTextColor = K.text,
+                        focusedBorderColor = K.coral,
+                        unfocusedBorderColor = K.line,
+                        focusedLabelColor = K.coral,
+                        unfocusedLabelColor = K.muted,
+                        cursorColor = K.accent,
+                    ),
+                modifier = Modifier.weight(1f),
+            )
+            TvButton("Szukaj", primary = true, onClick = { search() })
+        }
+        error?.let { Text(it, color = K.coral, fontSize = 15.sp) }
+        if (loading) Text("Wczytywanie…", color = K.muted, fontSize = 15.sp)
+        val item = opened
+        if (item != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                TvButton("Wróć do wyników", onClick = {
+                    opened = null
+                    files = null
+                })
+                Text("${item.title} · ${item.license}", color = K.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            val list = files
+            when {
+                list == null -> Text("Wczytywanie plików…", color = K.muted, fontSize = 15.sp)
+                list.isEmpty() -> Text("W tej pozycji nie ma plików gier, które Retro TV potrafi uruchomić.", color = K.muted, fontSize = 15.sp)
+                else ->
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(list) { f ->
+                            ListRow(f.name.substringAfterLast('/'), RomFiles.formatSize(f.size)) {
+                                TvButton("Pobierz", primary = true, onClick = {
+                                    scope.launch {
+                                        try {
+                                            setJob(Job("Pobieram ${f.name.substringAfterLast('/')}", 0f))
+                                            RomFiles.copyIn(activity, "archive", f.name.substringAfterLast('/'), f.size, { ArchiveSearch.open(f) }) { p ->
+                                                setJob(Job("Pobieram ${f.name.substringAfterLast('/')}", p))
+                                            }
+                                            activity.rescan()
+                                            toast("Pobrano. Gra pojawi się w bibliotece.")
+                                        } catch (e: Exception) {
+                                            Timber.e(e, "archive.org: pobieranie nie powiodło się")
+                                            toast("Nie udało się pobrać: ${e.message}")
+                                        } finally {
+                                            setJob(null)
+                                        }
+                                    }
+                                })
+                            }
+                        }
+                    }
+            }
+        } else {
+            val list = results
+            if (list != null && list.isEmpty()) Text("Brak wyników. Spróbuj innych słów, np. nazwy konsoli po angielsku.", color = K.muted, fontSize = 15.sp)
+            if (!list.isNullOrEmpty()) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(list) { r ->
+                        ListRow(r.title, listOf(r.license, r.description).filter { it.isNotBlank() }.joinToString(" · ")) {
+                            TvButton("Pliki", onClick = {
+                                opened = r
+                                files = null
+                                scope.launch {
+                                    files =
+                                        try {
+                                            ArchiveSearch.files(r.id)
+                                        } catch (e: Exception) {
+                                            Timber.w(e, "archive.org: lista plików")
+                                            emptyList()
+                                        }
+                                }
+                            })
+                        }
+                    }
+                }
+            }
+        }
+        Text(
+            "Pokazujemy tylko pozycje, które autorzy oznaczyli jako wolne do pobrania. Sprawdź opis gry przed pobraniem.",
+            color = K.muted,
+            fontSize = 13.sp,
+        )
+    }
 }
 
 // ---------- Z linku ----------

@@ -101,6 +101,8 @@ interface HomeActions {
 
     fun openSystem()
 
+    fun testSystem(meta: MetaSystemID)
+
     /** Usuwa plik gry; zwraca komunikat dla użytkownika. */
     fun deleteGame(game: Game): String
 }
@@ -109,6 +111,8 @@ private sealed class Screen {
     object Start : Screen()
 
     object Search : Screen()
+
+    object ConsoleTest : Screen()
 
     data class Library(val meta: MetaSystemID) : Screen()
 
@@ -145,6 +149,7 @@ fun HomeScreen(
                 when (val s = screen) {
                     Screen.Start -> StartContent(state, topGames, actions, showDetails, onOpenSystem = { open(Screen.Library(it)) })
                     Screen.Search -> SearchContent(viewModel, state, actions, showDetails)
+                    Screen.ConsoleTest -> ConsoleTestContent(state, actions)
                     is Screen.Library -> LibraryContent(s.meta, state, libraryGames, actions, showDetails)
                     is Screen.Details -> {
                         val all = state.recent + state.favorites + topGames + (libraryGames ?: emptyList()) + viewModel.searchResults.collectAsState().value
@@ -208,6 +213,7 @@ private fun Rail(
 
         RailLabel("USTAWIENIA")
         RailItem("Kontrolery", false, onClick = actions::openControllers)
+        RailItem("Test konsol", screen == Screen.ConsoleTest) { onOpen(Screen.ConsoleTest) }
         RailItem("Emulacja i ekran", false, onClick = actions::openEmulationSettings)
         RailItem("System", false, onClick = actions::openSystem)
     }
@@ -759,6 +765,66 @@ private fun DetailRow(
     Row {
         Text(label, color = K.muted, fontSize = 15.sp, modifier = Modifier.width(130.dp))
         Text(value, color = K.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+// ---------- Test konsol ----------
+
+@Composable
+private fun ConsoleTestContent(
+    state: HomeViewModel.HomeState,
+    actions: HomeActions,
+) {
+    val context = LocalContext.current
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(3000)
+            tick++
+        }
+    }
+    val counts = state.systems.associate { it.metaSystem to it.count }
+    Column(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, top = 24.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        TopBar("Test konsol", "Uruchom po jednej grze z każdej konsoli – wynik zapisze się automatycznie", state)
+        androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(MetaSystemID.values().toList()) { meta ->
+                val count = counts[meta] ?: 0
+                val results = meta.systemIDs.mapNotNull { id -> ConsoleTests.get(context, id.dbname)?.let { tick; it } }
+                val last = results.maxByOrNull { it.time }
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(K.card).padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Image(
+                        painter = painterResource(meta.imageResId),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(K.text),
+                        modifier = Modifier.size(40.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(context.getString(meta.titleResId), color = K.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            when {
+                                last != null -> (if (last.ok) "✓ działa · " else "✗ błąd · ") + last.detail
+                                count == 0 -> "brak gier – dodaj grę tej konsoli, żeby ją przetestować"
+                                else -> "jeszcze nie testowano · ${gamesCount(count)}"
+                            },
+                            color =
+                                when {
+                                    last?.ok == true -> K.ok
+                                    last != null -> K.coral
+                                    else -> K.muted
+                                },
+                            fontSize = 13.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    TvButton(if (last == null) "Uruchom test" else "Testuj ponownie", enabled = count > 0, onClick = { actions.testSystem(meta) })
+                }
+            }
+        }
     }
 }
 

@@ -293,3 +293,80 @@ object LinkDownload {
             Target(name, response.body?.contentLength() ?: -1L, response)
         }
 }
+
+/**
+ * Wyszukiwanie gier w archive.org – tylko wśród pozycji oznaczonych przez autorów
+ * jako domena publiczna albo Creative Commons (homebrew, darmowe gry).
+ */
+object ArchiveSearch {
+    data class Item(val id: String, val title: String, val license: String, val description: String)
+
+    data class FileEntry(val itemId: String, val name: String, val size: Long) {
+        val url: String get() = "https://archive.org/download/$itemId/" + name.split('/').joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+    }
+
+    private val client by lazy {
+        OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
+    }
+
+    private fun get(url: String): String {
+        val request = Request.Builder().url(url).header("User-Agent", "RetroTV-Android").build()
+        client.newCall(request).execute().use { r ->
+            if (!r.isSuccessful) throw IOException("archive.org odpowiedział kodem ${r.code}")
+            return r.body?.string() ?: throw IOException("Pusta odpowiedź")
+        }
+    }
+
+    fun licenseLabel(url: String): String =
+        when {
+            url.contains("publicdomain") -> "domena publiczna"
+            url.contains("creativecommons") -> "Creative Commons"
+            else -> "licencja autora"
+        }
+
+    suspend fun search(query: String): List<Item> =
+        withContext(Dispatchers.IO) {
+            val words = query.trim().replace(Regex("""[^\p{L}\p{N}\s]"""), " ").trim()
+            val q =
+                "(${words.ifBlank { "homebrew" }}) AND mediatype:software AND " +
+                    "(licenseurl:*creativecommons* OR licenseurl:*publicdomain*)"
+            val url =
+                "https://archive.org/advancedsearch.php?q=" + java.net.URLEncoder.encode(q, "UTF-8") +
+                    "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=licenseurl&fl%5B%5D=description" +
+                    "&rows=60&page=1&output=json"
+            val docs = JSONObject(get(url)).getJSONObject("response").getJSONArray("docs")
+            (0 until docs.length()).map { docs.getJSONObject(it) }.map { d ->
+                val desc =
+                    when (val raw = d.opt("description")) {
+                        is org.json.JSONArray -> raw.optString(0)
+                        null -> ""
+                        else -> raw.toString()
+                    }
+                Item(
+                    id = d.getString("identifier"),
+                    title = d.optString("title", d.getString("identifier")),
+                    license = licenseLabel(d.optString("licenseurl")),
+                    description = desc.replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim().take(160),
+                )
+            }
+        }
+
+    /** Pliki gier w danej pozycji (pomija zrzuty ekranu, opisy itp.). */
+    suspend fun files(itemId: String): List<FileEntry> =
+        withContext(Dispatchers.IO) {
+            val files = JSONObject(get("https://archive.org/metadata/$itemId")).optJSONArray("files") ?: return@withContext emptyList()
+            (0 until files.length()).map { files.getJSONObject(it) }
+                .filter { RomFiles.isRom(it.optString("name")) && it.optString("source") != "metadata" }
+                .map { FileEntry(itemId, it.getString("name"), it.optString("size").toLongOrNull() ?: 0L) }
+        }
+
+    fun open(file: FileEntry): InputStream {
+        val request = Request.Builder().url(file.url).header("User-Agent", "RetroTV-Android").build()
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            throw IOException("Pobieranie nie powiodło się (kod ${response.code})")
+        }
+        return response.body?.byteStream() ?: throw IOException("Pusta odpowiedź")
+    }
+}

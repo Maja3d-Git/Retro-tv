@@ -189,17 +189,10 @@ private fun Rail(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         com.swordfish.lemuroid.retrotv.ui.RailHeader(null)
-        RailItem("Start", screen == Screen.Start) { onOpen(Screen.Start) }
+        // Konsole są na ekranie Start – lista gier konsoli podświetla „Start”.
+        RailItem("Start", screen == Screen.Start || screen is Screen.Library) { onOpen(Screen.Start) }
         RailItem("Szukaj", screen == Screen.Search) { onOpen(Screen.Search) }
         RailItem("Dołącz do gry", false, onClick = actions::joinOnline)
-
-        if (state.systems.isNotEmpty()) {
-            RailLabel("KONSOLE")
-            state.systems.forEach { info ->
-                val selected = (screen as? Screen.Library)?.meta == info.metaSystem
-                RailItem(info.getName(context), selected, count = info.count) { onOpen(Screen.Library(info.metaSystem)) }
-            }
-        }
 
         RailLabel("BIBLIOTEKA")
         RailItem("Gry i ROM-y", false, onClick = actions::openRomManager)

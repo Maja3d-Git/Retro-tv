@@ -35,6 +35,7 @@ import com.swordfish.lemuroid.lib.storage.RomFiles
 import com.swordfish.lemuroid.lib.storage.StorageFile
 import com.swordfish.lemuroid.lib.storage.StorageProvider
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import java.io.File
 import java.io.InputStream
@@ -55,7 +56,11 @@ class LocalStorageProvider(
     override val enabledByDefault = true
 
     override fun listBaseStorageFiles(): Flow<List<BaseStorageFile>> =
-        walkDirectory(getExternalFolder() ?: directoriesManager.getInternalRomsDirectory())
+        flow {
+            emitAll(walkDirectory(getExternalFolder() ?: directoriesManager.getInternalRomsDirectory()))
+            // Retro TV: foldery wybrane wbudowaną przeglądarką (np. na pendrivie).
+            RetroTvFolders.pathFolders(context).map { File(it) }.filter { it.isDirectory }.forEach { emitAll(walkDirectory(it)) }
+        }
 
     override fun getStorageFile(baseStorageFile: BaseStorageFile): StorageFile? {
         return DocumentFileParser.parseDocumentFile(context, baseStorageFile)

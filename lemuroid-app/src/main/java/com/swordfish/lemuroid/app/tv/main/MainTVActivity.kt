@@ -127,11 +127,8 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
             override fun toggleFavorite(game: Game) = gameInteractor.onFavoriteToggle(game, !game.isFavorite)
 
             override fun pickFolder() {
-                if (TVHelper.isSAFSupported(this@MainTVActivity)) {
-                    StorageFrameworkPickerLauncher.pickFolder(this@MainTVActivity)
-                } else {
-                    TVFolderPickerLauncher.pickFolder(this@MainTVActivity)
-                }
+                // Wbudowana przeglądarka folderów – wiele telewizorów nie ma systemowego okna wyboru.
+                startActivity(android.content.Intent(this@MainTVActivity, com.swordfish.lemuroid.retrotv.roms.RomManagerActivity::class.java))
             }
 
             override fun deleteGame(game: Game): String {

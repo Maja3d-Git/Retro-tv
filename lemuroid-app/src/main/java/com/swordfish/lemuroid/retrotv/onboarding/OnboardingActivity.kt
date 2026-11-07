@@ -148,11 +148,8 @@ class OnboardingActivity : ComponentActivity() {
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Wybierz folder", primary = true, modifier = Modifier.focusRequester(focus), onClick = {
-                if (TVHelper.isSAFSupported(this@OnboardingActivity)) {
-                    StorageFrameworkPickerLauncher.pickFolder(this@OnboardingActivity)
-                } else {
-                    TVFolderPickerLauncher.pickFolder(this@OnboardingActivity)
-                }
+                // Wbudowana przeglądarka folderów – wiele telewizorów nie ma systemowego okna wyboru.
+                startActivity(android.content.Intent(this@OnboardingActivity, com.swordfish.lemuroid.retrotv.roms.RomManagerActivity::class.java))
                 next()
             })
             TvButton("Darmowe gry", onClick = {

@@ -105,6 +105,31 @@ class RomManagerActivity : ComponentActivity() {
         }
     }
 
+    private var onReadGranted: (() -> Unit)? = null
+
+    private val readPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) onReadGranted?.invoke()
+            onReadGranted = null
+        }
+
+    /** Uruchamia [onReady], gdy aplikacja ma dostęp do plików; inaczej prosi o zgodę i zwraca komunikat. */
+    fun withFileAccess(
+        toast: (String) -> Unit,
+        onReady: () -> Unit,
+    ) {
+        when {
+            FileAccess.hasAccess(this) -> onReady()
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R -> {
+                onReadGranted = onReady
+                readPermission.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            FileAccess.openAllFilesSettings(this) ->
+                toast("Włącz „Dostęp do wszystkich plików” dla Retro TV, wróć i wybierz ponownie.")
+            else -> toast("Telewizor nie ma ekranu zgody na pliki. Z komputera: ${FileAccess.adbCommand(this)}")
+        }
+    }
+
     fun rescan() = LibraryIndexScheduler.scheduleLibrarySync(applicationContext)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,6 +145,8 @@ private fun RomManagerScreen(activity: RomManagerActivity) {
     var section by remember { mutableStateOf(RomSection.FOLDERS) }
     var job by remember { mutableStateOf<Job?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var browse by remember { mutableStateOf<BrowseRequest?>(null) }
+    val openBrowser: (BrowseRequest) -> Unit = { req -> activity.withFileAccess({ message = it }) { browse = req } }
     val tabs = remember { RomSection.values().associateWith { FocusRequester() } }
     LaunchedEffect(Unit) { runCatching { tabs.getValue(RomSection.FOLDERS).requestFocus() } }
 
@@ -138,9 +165,9 @@ private fun RomManagerScreen(activity: RomManagerActivity) {
             }
             Box(Modifier.weight(1f).fillMaxHeight().tvPane().padding(horizontal = 32.dp, vertical = 28.dp)) {
                 when (section) {
-                    RomSection.FOLDERS -> FoldersSection(activity) { message = it }
+                    RomSection.FOLDERS -> FoldersSection(activity, openBrowser) { message = it }
                     RomSection.PHONE -> PhoneSection(activity)
-                    RomSection.USB -> UsbSection(activity, { job = it }) { message = it }
+                    RomSection.USB -> UsbSection(activity, openBrowser, { job = it }) { message = it }
                     RomSection.NAS -> NasSection(activity, { job = it }) { message = it }
                     RomSection.HOMEBREW -> HomebrewSection(activity, { job = it }) { message = it }
                     RomSection.ARCHIVE -> ArchiveSection(activity, { job = it }) { message = it }
@@ -148,6 +175,9 @@ private fun RomManagerScreen(activity: RomManagerActivity) {
                     RomSection.STORAGE -> StorageSection(activity) { message = it }
                 }
             }
+        }
+        browse?.let { req ->
+            FolderBrowser(req.title, req.confirm, onPick = { browse = null; req.onPick(it) }, onClose = { browse = null })
         }
         val j = job
         if (j != null) {
@@ -179,6 +209,8 @@ private fun RomManagerScreen(activity: RomManagerActivity) {
         }
     }
 }
+
+private class BrowseRequest(val title: String, val confirm: String, val onPick: (File) -> Unit)
 
 @Composable
 private fun TabItem(
@@ -263,22 +295,34 @@ private fun ConsoleChips(
 }
 
 private val noPickerMessage =
-    "Ten telewizor nie ma systemowego okna wyboru folderów. Skorzystaj z dysku sieciowego albo darmowych gier."
+    "Ten telewizor nie ma systemowego okna wyboru folderów. Użyj wbudowanej przeglądarki (pierwszy przycisk)."
 
 // ---------- Foldery ----------
 
 @Composable
 private fun FoldersSection(
     activity: RomManagerActivity,
+    openBrowser: (BrowseRequest) -> Unit,
     toast: (String) -> Unit,
 ) {
     var folders by remember { mutableStateOf(RetroTvFolders.allFolders(activity)) }
+    var paths by remember { mutableStateOf(RetroTvFolders.pathFolders(activity)) }
     val main = RetroTvFolders.mainFolder(activity)
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         SectionTitle("Foldery z grami", "Retro TV skanuje wszystkie te foldery i pamięć telewizora")
         LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 ListRow("Pamięć Retro TV", "Gry zaimportowane z pendrive’a, dysku sieciowego i katalogu") {}
+            }
+            items(paths) { path ->
+                ListRow(File(path).name.ifEmpty { path }, path) {
+                    TvButton("Usuń", onClick = {
+                        RetroTvFolders.removePathFolder(activity, path)
+                        paths = RetroTvFolders.pathFolders(activity)
+                        activity.rescan()
+                        toast("Usunięto folder. Gry z niego znikną z biblioteki.")
+                    })
+                }
             }
             items(folders) { uri ->
                 ListRow(RomFiles.folderLabel(activity, uri), if (uri == main) "folder główny" else "folder dodatkowy") {
@@ -296,6 +340,16 @@ private fun FoldersSection(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Dodaj folder", primary = true, onClick = {
+                openBrowser(
+                    BrowseRequest("Dodaj folder z grami", "Dodaj ten folder") { dir ->
+                        RetroTvFolders.addPathFolder(activity, dir.path)
+                        paths = RetroTvFolders.pathFolders(activity)
+                        activity.rescan()
+                        toast("Dodano folder. Skanuję gry…")
+                    },
+                )
+            })
+            TvButton("Okno systemowe", onClick = {
                 val ok =
                     activity.pickTree { uri ->
                         RetroTvFolders.addExtraFolder(activity, uri.toString())
@@ -364,6 +418,7 @@ private fun PhoneSection(activity: RomManagerActivity) {
 @Composable
 private fun UsbSection(
     activity: RomManagerActivity,
+    openBrowser: (BrowseRequest) -> Unit,
     setJob: (Job?) -> Unit,
     toast: (String) -> Unit,
 ) {
@@ -397,6 +452,18 @@ private fun UsbSection(
         SectionTitle("Import z pendrive’a", "Skopiuj gry do pamięci telewizora, żeby działały bez pendrive’a")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Wybierz folder na pendrivie", primary = found == null, onClick = {
+                openBrowser(
+                    BrowseRequest("Folder na pendrivie", "Szukaj gier tutaj") { dir ->
+                        scanning = true
+                        scope.launch {
+                            found = runCatching { FileAccess.scanRoms(dir) }.getOrElse { emptyList() }
+                            selected = found!!.map { it.source }.toSet()
+                            scanning = false
+                        }
+                    },
+                )
+            })
+            TvButton("Okno systemowe", onClick = {
                 val ok =
                     activity.pickTree { uri ->
                         scanning = true

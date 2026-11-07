@@ -27,7 +27,7 @@ data class ReleaseInfo(
     val apkUrl: String,
     val apkSize: Long,
 ) {
-    val versionName: String get() = "1.0.$build"
+    val versionName: String get() = title.removePrefix("Retro TV").trim().ifBlank { "build $build" }
     val isNewerThanInstalled: Boolean get() = build > BuildConfig.RETROTV_BUILD
 }
 

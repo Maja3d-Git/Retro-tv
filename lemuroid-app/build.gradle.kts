@@ -15,7 +15,8 @@ android {
         val retrotvBuild = (project.findProperty("retrotvBuild") as String?)?.toIntOrNull() ?: 0
         val retrotvBuildTime = (project.findProperty("retrotvBuildTime") as String?) ?: "lokalne budowanie"
         versionCode = 300 + retrotvBuild
-        versionName = "1.0.$retrotvBuild"
+        val retrotvBase = rootProject.file("version.txt").readText().trim()
+        versionName = "$retrotvBase.$retrotvBuild"
         applicationId = "pl.maja3d.retrotv"
         buildConfigField("int", "RETROTV_BUILD", "$retrotvBuild")
         buildConfigField("String", "RETROTV_BUILD_TIME", "\"$retrotvBuildTime\"")
@@ -94,11 +95,12 @@ android {
             // Retro TV: bez własnego release.jks podpisujemy kluczem debug,
             // żeby APK z GitHub Actions dało się od razu zainstalować na TV.
             val releaseKeystore = file("$rootDir/release.jks")
-            if (releaseKeystore.exists()) {
+            val releasePassword = System.getenv("RETROTV_KEYSTORE_PASSWORD")
+            if (releaseKeystore.exists() && !releasePassword.isNullOrEmpty()) {
                 storeFile = releaseKeystore
-                keyAlias = "lemuroid"
-                storePassword = "lemuroid"
-                keyPassword = "lemuroid"
+                keyAlias = "retrotv"
+                storePassword = releasePassword
+                keyPassword = releasePassword
             } else {
                 storeFile = file("$rootDir/debug.keystore")
                 keyAlias = "androiddebugkey"

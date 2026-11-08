@@ -156,7 +156,7 @@ fun HomeScreen(
 
     Box(Modifier.fillMaxSize().background(K.bg)) {
         Column(Modifier.fillMaxSize()) {
-            TopNav(actions, onStart = { open(Screen.Start) }, onSearch = { open(Screen.Search) }, onSettings = { settingsOpen = true })
+            TopNav(actions, onStart = { open(Screen.Start) }, onSearch = { open(Screen.Search) }, onSettings = { actions.openSystem() })
             Box(Modifier.weight(1f).fillMaxWidth().tvRowPane()) {
                 when (val s = screen) {
                     Screen.Start -> StartContent(state, topGames, actions, showDetails, onOpenSystem = { open(Screen.Library(it)) }, onSearch = { open(Screen.Search) })

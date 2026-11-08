@@ -82,6 +82,8 @@ import com.swordfish.lemuroid.retrotv.ui.ThemeMode
 import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 
 private enum class Section(val title: String) {
+    CONTROLLERS("Kontrolery"),
+    EMULATION("Emulacja i ekran"),
     UPDATES("Aktualizacje"),
     APPEARANCE("Wygląd"),
     BACKUP("Kopie zapisów"),
@@ -114,7 +116,9 @@ class TVSystemActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         RetroTvTheme.apply(this)
         val startUpdate = savedInstanceState == null && intent.getBooleanExtra(EXTRA_START_UPDATE, false)
-        val initial = Section.values().firstOrNull { it.name == intent.getStringExtra(EXTRA_SECTION) } ?: Section.UPDATES
+        val initial =
+            Section.values().firstOrNull { it.name == intent.getStringExtra(EXTRA_SECTION) }
+                ?: if (startUpdate) Section.UPDATES else Section.CONTROLLERS
         setContent { RetroTvContent { SystemScreen(this, startUpdate, initial) } }
     }
 }
@@ -145,7 +149,7 @@ private fun SystemScreen(
                 .padding(horizontal = 12.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            RailHeader("System")
+            RailHeader("Ustawienia")
             visible.forEach { s ->
                 val source = remember { MutableInteractionSource() }
                 val focused by source.collectIsFocusedAsState()
@@ -182,6 +186,8 @@ private fun SystemScreen(
 
         Box(Modifier.weight(1f).fillMaxHeight().tvPane().padding(horizontal = 32.dp, vertical = 28.dp)) {
             when (section) {
+                Section.CONTROLLERS -> com.swordfish.lemuroid.retrotv.controllers.ControllersContent(activity, embedded = true)
+                Section.EMULATION -> com.swordfish.lemuroid.retrotv.settings.EmulationContent(activity, embedded = true)
                 Section.UPDATES -> UpdatesSection(activity, startUpdate)
                 Section.APPEARANCE -> AppearanceSection(activity)
                 Section.BACKUP -> BackupSection(activity)

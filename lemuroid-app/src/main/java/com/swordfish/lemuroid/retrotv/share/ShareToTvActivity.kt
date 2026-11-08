@@ -180,7 +180,7 @@ class ShareToTvActivity : ComponentActivity() {
 
     private fun sendAll() {
         val (host, port) = target() ?: run {
-            message = "Nie znaleziono telewizora. Wpisz jego adres IP (System → Połączenie w Retro TV)."
+            message = "Nie znaleziono telewizora. Wpisz jego adres IP (zębatka → Połączenie w Retro TV)."
             return
         }
         if (code.length != 6) {

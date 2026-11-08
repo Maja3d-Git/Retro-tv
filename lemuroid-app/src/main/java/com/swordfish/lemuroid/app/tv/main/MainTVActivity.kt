@@ -186,11 +186,11 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
             override fun stopScan() = LibraryIndexScheduler.cancelLibrarySync(applicationContext)
 
             override fun openEmulationSettings() {
-                startActivity(Intent(this@MainTVActivity, com.swordfish.lemuroid.retrotv.settings.EmulationSettingsActivity::class.java))
+                TVSystemActivity.launchSection(this@MainTVActivity, "EMULATION")
             }
 
             override fun openControllers() {
-                startActivity(Intent(this@MainTVActivity, com.swordfish.lemuroid.retrotv.controllers.ControllersActivity::class.java))
+                TVSystemActivity.launchSection(this@MainTVActivity, "CONTROLLERS")
             }
 
             override fun openSystem() {

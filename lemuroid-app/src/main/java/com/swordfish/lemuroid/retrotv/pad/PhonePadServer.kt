@@ -495,8 +495,8 @@ object PhonePadServer {
             return fail("415 Unsupported Media Type", "To nie jest aplikacja Retro TV")
         }
         if (android.os.Build.VERSION.SDK_INT >= 26 && !appContext.packageManager.canRequestPackageInstalls()) {
-            notify("Zezwól Retro TV na instalowanie aplikacji: System → Aktualizacje")
-            return fail("403 Forbidden", "Telewizor nie ma zgody na instalowanie. Na telewizorze: System → Aktualizacje → zezwól.")
+            notify("Zezwól Retro TV na instalowanie aplikacji: Ustawienia → Aktualizacje")
+            return fail("403 Forbidden", "Telewizor nie ma zgody na instalowanie. Na telewizorze: Ustawienia → Aktualizacje → zezwól.")
         }
         Timber.i("Odebrano aktualizację z telefonu (%d B)", length)
         main.post {

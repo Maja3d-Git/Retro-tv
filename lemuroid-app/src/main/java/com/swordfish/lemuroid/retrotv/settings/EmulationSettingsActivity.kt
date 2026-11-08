@@ -154,7 +154,7 @@ fun EmulationContent(
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Ustawienia zaawansowane", onClick = { activity.startActivity(Intent(activity, TVSettingsActivity::class.java)) })
-            TvButton("Wróć", onClick = { finish() })
+            if (!embedded) TvButton("Wróć", onClick = { activity.finish() })
         }
         Spacer(Modifier.width(1.dp))
     }

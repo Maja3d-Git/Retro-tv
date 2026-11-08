@@ -127,18 +127,26 @@ class PhonePadActivity : ComponentActivity() {
         connecting = false
     }
 
+    /** Rozłączenie dopiero po dłuższym pobycie w tle – krótkie wyjście (zrzut ekranu, aparat) nie zrywa pada. */
+    private val backgroundDisconnect =
+        Runnable {
+            wasStopped = true
+            disconnectAll()
+        }
+
     override fun onStop() {
         super.onStop()
-        // W tle Android i tak zrywa połączenia – zamykamy je sami i łączymy od nowa po powrocie.
-        wasStopped = true
-        disconnectAll()
+        main.removeCallbacks(backgroundDisconnect)
+        main.postDelayed(backgroundDisconnect, 90_000)
     }
 
     override fun onStart() {
         super.onStart()
-        if (wasStopped) {
+        main.removeCallbacks(backgroundDisconnect)
+        val alive = lan?.isOpen == true || relayReady
+        if (wasStopped || !alive) {
             wasStopped = false
-            closed(1006, "")
+            if (welcomed || lan != null || relay != null) closed(1006, "")
         }
     }
 

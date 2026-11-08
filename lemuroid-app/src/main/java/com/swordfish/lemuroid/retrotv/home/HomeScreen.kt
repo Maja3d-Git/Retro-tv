@@ -223,13 +223,15 @@ private fun TopNav(
         NavPill("Dołącz do gry", selected = false, onClick = actions::joinOnline)
         Spacer(Modifier.weight(1f))
         IconPill(androidx.compose.material.icons.Icons.Outlined.Search, "Szukaj gry", onSearch)
-        Chip(if (pads == 0) "Brak pada" else if (pads == 1) "Pad podłączony" else "$pads pady", if (pads > 0) K.ok else K.muted)
+        Chip(if (pads == 0) "Brak pada" else if (pads == 1) "1 pad" else "$pads pady", if (pads > 0) K.ok else K.muted)
         if (phones.isNotEmpty()) Chip(if (phones.size == 1) "1 telefon" else "${phones.size} telefony", K.ok)
         Text(
             SimpleDateFormat("HH:mm", Locale.getDefault()).format(now),
             color = K.muted,
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(horizontal = 6.dp),
         )
         IconPill(androidx.compose.material.icons.Icons.Outlined.Settings, "Ustawienia", onSettings)
@@ -271,11 +273,13 @@ private fun NavPill(
             .clip(RoundedCornerShape(22.dp))
             .background(if (selected) K.p.activeBg else Color.Transparent)
             .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
+            maxLines = 1,
+            softWrap = false,
             color = if (selected) K.p.activeFg else K.muted,
             fontSize = 16.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
@@ -502,7 +506,7 @@ private fun Chip(
             Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(dot))
             Spacer(Modifier.width(7.dp))
         }
-        Text(text, color = K.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(text, color = K.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, softWrap = false)
     }
 }
 
@@ -620,7 +624,7 @@ private fun ContinueCard(
             .clip(RoundedCornerShape(22.dp))
             .background(K.card),
     ) {
-        Cover(game, Modifier.width(380.dp).fillMaxHeight(), titleSize = 24)
+        Cover(game, Modifier.width(300.dp).fillMaxHeight(), titleSize = 22)
         Column(
             Modifier.weight(1f).padding(horizontal = 26.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.Center,
@@ -641,7 +645,6 @@ private fun ContinueCard(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TvButton("Graj", primary = true, onClick = { actions.play(game) }, modifier = Modifier.focusRequester(focus))
                 TvButton("Z drużyną", onClick = { actions.playTeam(game) })
-                TvButton("Od nowa", onClick = { actions.restart(game) })
                 TvButton("Szczegóły", onClick = { onDetails(game) })
             }
         }

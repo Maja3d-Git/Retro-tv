@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -163,17 +164,30 @@ class OnboardingActivity : ComponentActivity() {
     ) {
         Title(
             "Czym będziesz grać?",
-            "Pad Bluetooth sparujesz w Ustawieniach Android TV → Piloty i akcesoria. " +
-                "Możesz też użyć telefonu: zeskanuj kod aparatem (ta sama sieć Wi-Fi).",
+            "Pad: sparuj go w Kontrolerach (zębatka → Kontrolery → „Sparuj pad Bluetooth”) – jest tam instrukcja dla popularnych padów. " +
+                "Telefon: zainstaluj Retro TV na telefonie (kod po lewej), otwórz aplikację i zeskanuj kod po prawej.",
         )
         val ip = remember { SystemStatus.network(this).ipAddress }
         val phones by PhonePadServer.phones.collectAsState()
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
             val serverPort by PhonePadServer.port.collectAsState()
-            if (ip != null) QrImage(remember(serverPort) { PhonePadServer.pairingUrl(this@OnboardingActivity, ip) }, Modifier.size(160.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White).padding(8.dp)) {
+                    QrImage(com.swordfish.lemuroid.retrotv.controllers.ControllersActivity.APK_URL, Modifier.size(120.dp))
+                }
+                Text("1. Pobierz aplikację", color = K.muted, fontSize = 13.sp)
+            }
+            if (ip != null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White).padding(8.dp)) {
+                        QrImage(remember(serverPort) { PhonePadServer.pairingUrl(this@OnboardingActivity, ip) }, Modifier.size(150.dp))
+                    }
+                    Text("2. Zeskanuj w aplikacji", color = K.muted, fontSize = 13.sp)
+                }
+            }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    if (phones.isEmpty()) "Czekam na telefon…" else "Połączono: ${phones.joinToString { it.name }}",
+                    if (phones.isEmpty()) "Czekam na telefon…" else "Gotowe: ${phones.joinToString { it.name }}",
                     color = if (phones.isEmpty()) K.muted else K.ok,
                     fontSize = 16.sp,
                 )
@@ -181,7 +195,7 @@ class OnboardingActivity : ComponentActivity() {
                     TvButton("Dalej", primary = true, onClick = next, modifier = Modifier.focusRequester(focus))
                     TvButton("Pomiń, ustawię później", onClick = next)
                 }
-                Text("Telefon połączysz w każdej chwili w System → Kontrolery.", color = K.muted, fontSize = 13.sp)
+                Text("Później: zębatka → Kontrolery. Menu gry z pada: Select + Start.", color = K.muted, fontSize = 13.sp)
             }
         }
     }
@@ -190,8 +204,8 @@ class OnboardingActivity : ComponentActivity() {
     private fun DoneStep(focus: FocusRequester) {
         Title(
             "Gotowe!",
-            "Kopie zapisów w Google Drive włączysz w System → Kopie zapisów, gdy będą dostępne. " +
-                "Ustawienia, aktualizacje i dziennik znajdziesz w menu System.",
+            "Kontrolery, wygląd, aktualizacje i kopie zapisów znajdziesz pod zębatką w prawym górnym rogu. " +
+                "Grę z kimś zaczniesz przyciskiem „Z drużyną” przy każdej grze.",
         )
         TvButton("Zaczynamy", primary = true, modifier = Modifier.focusRequester(focus).fillMaxWidth(0.4f), onClick = {
             markDone(this@OnboardingActivity)

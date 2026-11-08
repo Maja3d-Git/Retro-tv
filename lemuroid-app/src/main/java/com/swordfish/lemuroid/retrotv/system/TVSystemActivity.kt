@@ -86,7 +86,7 @@ private enum class Section(val title: String) {
     APPEARANCE("Wygląd"),
     BACKUP("Kopie zapisów"),
     NETWORK("Połączenie"),
-    CONTROLLERS("Kontrolery"),
+    CONSOLES("Konsole"),
     LOGS("Dziennik"),
     ABOUT("O aplikacji"),
 }
@@ -128,14 +128,7 @@ private fun SystemScreen(
     startUpdate: Boolean,
     initial: Section,
 ) {
-    // Kontrolery mają własne wejście w menu głównym – otwierane osobno, bez zakładek Systemu.
-    if (initial == Section.CONTROLLERS) {
-        Box(Modifier.fillMaxSize().background(K.bg).tvPane().padding(horizontal = 40.dp, vertical = 28.dp)) {
-            ControllersSection()
-        }
-        return
-    }
-    val visible = remember { Section.values().filter { it != Section.CONTROLLERS } }
+    val visible = remember { Section.values().toList() }
     var section by remember { mutableStateOf(initial) }
     val tabs = remember { visible.associateWith { FocusRequester() } }
     LaunchedEffect(Unit) { runCatching { tabs.getValue(initial).requestFocus() } }
@@ -193,7 +186,7 @@ private fun SystemScreen(
                 Section.APPEARANCE -> AppearanceSection(activity)
                 Section.BACKUP -> BackupSection(activity)
                 Section.NETWORK -> NetworkSection()
-                Section.CONTROLLERS -> ControllersSection()
+                Section.CONSOLES -> ConsolesSection(activity)
                 Section.LOGS -> LogsSection()
                 Section.ABOUT -> AboutSection()
             }
@@ -384,6 +377,25 @@ private fun AppearanceSection(activity: ComponentActivity) {
             color = K.muted,
             fontSize = 14.sp,
         )
+        SectionTitle("Obraz w grach", "Wygląd pikseli na ekranie")
+        val prefs = remember { com.swordfish.lemuroid.lib.preferences.SharedPreferencesHelper.getSharedPreferences(activity.applicationContext) }
+        val key = remember { activity.getString(com.swordfish.lemuroid.R.string.pref_key_shader_filter) }
+        var shader by remember { mutableStateOf(prefs.getString(key, "auto") ?: "auto") }
+        Panel {
+            listOf(
+                "auto" to "Automatycznie (zależnie od konsoli)",
+                "sharp" to "Ostry – wyraźne piksele",
+                "smooth" to "Gładki – zmiękczone krawędzie",
+                "crt" to "CRT – jak stary telewizor",
+                "lcd" to "LCD – jak ekran Game Boya",
+            ).forEach { (value, label) ->
+                TvChoice(label, shader == value) {
+                    shader = value
+                    prefs.edit().putString(key, value).apply()
+                }
+            }
+        }
+        Text("Zmiana działa od następnego uruchomienia gry.", color = K.muted, fontSize = 14.sp)
     }
 }
 
@@ -498,113 +510,39 @@ private fun NetworkSection() {
     }
 }
 
-// ---------- Kontrolery ----------
+// ---------- Konsole ----------
 
 @Composable
-private fun ControllersSection() {
-    val context = LocalContext.current
-    var list by remember { mutableStateOf(SystemStatus.controllers()) }
-    val phones by PhonePadServer.phones.collectAsState()
-    val ip = remember { SystemStatus.network(context).ipAddress }
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            SectionTitle("Kontrolery", "Pady Bluetooth i USB oraz telefony jako pady")
-            Panel {
-                Text("Pady", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                if (list.isEmpty()) {
-                    Text(
-                        "Nie wykryto żadnego pada. Sparuj pad w Ustawieniach Android TV → Piloty i akcesoria.",
-                        color = K.muted,
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp,
-                    )
-                } else {
-                    list.forEachIndexed { i, c -> InfoRow("Gracz ${i + 1}: ${c.name}", c.detail, K.ok) }
-                }
-            }
-            Panel {
-                Text("Telefony", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                if (phones.isEmpty()) {
-                    Text("Brak połączonych telefonów.", color = K.muted, fontSize = 15.sp)
-                } else {
-                    phones.forEach { p ->
-                        InfoRow("Telefon ${p.player}: ${p.name}", "gracz ${list.size + p.player} w grze", K.ok)
-                    }
-                }
-                Text(
-                    "W menu telefon działa jak pilot, a w grze jak pad z przyciskami danej konsoli. " +
-                        "Do $MAX_PHONES_TEXT telefonów naraz.",
-                    color = K.muted,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                )
-            }
-            Row { TvButton("Odśwież listę", onClick = { list = SystemStatus.controllers() }) }
+private fun ConsolesSection(activity: ComponentActivity) {
+    val bios =
+        remember {
+            runCatching {
+                com.swordfish.lemuroid.lib.bios.BiosManager(DirectoriesManager(activity.applicationContext)).getBiosInfo()
+            }.getOrNull()
         }
-        Column(
-            Modifier
-                .width(240.dp)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(16.dp))
-                .background(K.card)
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("Telefon jako pad", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            if (ip != null) {
-                val serverPort by PhonePadServer.port.collectAsState()
-                val url = remember(serverPort) { PhonePadServer.pairingUrl(context, ip) }
-                QrImage(url, Modifier.size(150.dp))
-                val ssid = remember { SystemStatus.network(context).ssid }
-                if (ssid != null) Text("Sieć: $ssid", color = K.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Zeskanuj aparatem telefonu w tej samej sieci Wi-Fi i obróć telefon poziomo.",
-                    color = K.muted,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                )
-                Text(
-                    "Kod do aplikacji na telefonie: ${PhonePadServer.token(context)}",
-                    color = K.text,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-                Text(url, color = K.muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                Text(
-                    if (serverPort > 0) "Serwer działa (port $serverPort)" else "Serwer uruchamia się…",
-                    color = if (serverPort > 0) K.ok else K.muted,
-                    fontSize = 12.sp,
-                )
-                val visitor by PhonePadServer.lastVisitor.collectAsState()
-                Text(
-                    visitor?.let { "Telefon dotarł do TV: $it" } ?: "Żaden telefon jeszcze nie dotarł do TV",
-                    color = if (visitor != null) K.ok else K.coral,
-                    fontSize = 12.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-                var testResult by remember { mutableStateOf<String?>(null) }
-                val scope = androidx.compose.runtime.rememberCoroutineScope()
-                TvButton("Test serwera", onClick = {
-                    testResult = "Sprawdzam…"
-                    scope.launch {
-                        testResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PhonePadServer.selfTest(ip) }
-                    }
-                })
-                testResult?.let { Text(it, color = K.muted, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
-            } else {
-                Text("Brak połączenia z siecią lokalną.", color = K.coral, fontSize = 14.sp)
-            }
+    val systems = remember { com.swordfish.lemuroid.lib.library.GameSystem.all().sortedBy { activity.getString(it.titleResId) } }
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionTitle("Konsole", "Obsługiwane konsole i potrzebne pliki BIOS")
+        systems.forEach { sys ->
+            val missing = bios?.notDetected?.filter { it.systemID == sys.id }.orEmpty()
+            val present = bios?.detected?.filter { it.systemID == sys.id }.orEmpty()
+            val status =
+                when {
+                    missing.isEmpty() && present.isEmpty() -> "gotowa – nie wymaga BIOS"
+                    missing.isEmpty() -> "gotowa – BIOS znaleziony"
+                    else -> "brakuje BIOS: " + missing.joinToString(", ") { it.displayName() }
+                }
+            InfoRow(activity.getString(sys.titleResId), status, if (missing.isEmpty()) K.ok else K.warn)
         }
+        Text(
+            "Pliki BIOS wgraj do folderu z grami albo przez „Z telefonu” – Retro TV rozpozna je przy skanowaniu. " +
+                "BIOS-y nie są dołączone do aplikacji (prawa autorskie).",
+            color = K.muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
     }
 }
-
-private const val MAX_PHONES_TEXT = "4"
 
 // ---------- Dziennik ----------
 

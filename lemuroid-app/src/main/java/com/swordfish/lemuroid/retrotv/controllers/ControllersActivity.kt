@@ -290,6 +290,7 @@ class ControllersActivity : ComponentActivity() {
     }
 
     companion object {
-        val APK_URL = "https://github.com/${BuildConfig.RETROTV_REPO}/releases/latest/download/retro-tv.apk"
+        // Kopia na GitHub Pages – działa także tam, gdzie github.com bywa niedostępny.
+        val APK_URL = "https://${BuildConfig.RETROTV_REPO.substringBefore('/').lowercase()}.github.io/${BuildConfig.RETROTV_REPO.substringAfter('/')}/update/retro-tv.apk"
     }
 }

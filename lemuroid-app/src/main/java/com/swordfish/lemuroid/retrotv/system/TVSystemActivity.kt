@@ -377,25 +377,7 @@ private fun AppearanceSection(activity: ComponentActivity) {
             color = K.muted,
             fontSize = 14.sp,
         )
-        SectionTitle("Obraz w grach", "Wygląd pikseli na ekranie")
-        val prefs = remember { com.swordfish.lemuroid.lib.preferences.SharedPreferencesHelper.getSharedPreferences(activity.applicationContext) }
-        val key = remember { activity.getString(com.swordfish.lemuroid.R.string.pref_key_shader_filter) }
-        var shader by remember { mutableStateOf(prefs.getString(key, "auto") ?: "auto") }
-        Panel {
-            listOf(
-                "auto" to "Automatycznie (zależnie od konsoli)",
-                "sharp" to "Ostry – wyraźne piksele",
-                "smooth" to "Gładki – zmiękczone krawędzie",
-                "crt" to "CRT – jak stary telewizor",
-                "lcd" to "LCD – jak ekran Game Boya",
-            ).forEach { (value, label) ->
-                TvChoice(label, shader == value) {
-                    shader = value
-                    prefs.edit().putString(key, value).apply()
-                }
-            }
-        }
-        Text("Zmiana działa od następnego uruchomienia gry.", color = K.muted, fontSize = 14.sp)
+        Text("Obraz w grach (ostry, gładki, CRT) ustawisz w: zębatka → Emulacja i ekran.", color = K.muted, fontSize = 14.sp)
     }
 }
 

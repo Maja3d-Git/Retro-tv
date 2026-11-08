@@ -150,6 +150,10 @@
             android:exported="false"
             android:theme="@style/LemuroidMaterialTheme" />
         <activity
+            android:name="com.swordfish.lemuroid.retrotv.settings.EmulationSettingsActivity"
+            android:exported="false"
+            android:theme="@style/LemuroidMaterialTheme" />
+        <activity
             android:name="com.swordfish.lemuroid.retrotv.controllers.ControllersActivity"
             android:exported="false"
             android:theme="@style/LemuroidMaterialTheme" />

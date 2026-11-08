@@ -348,7 +348,7 @@ private fun SettingsPanel(
                 onClose()
                 actions.openControllers()
             }
-            SettingsItem(androidx.compose.material.icons.Icons.Outlined.Tv, "Emulacja i ekran", "Filtry, proporcje, rdzenie") {
+            SettingsItem(androidx.compose.material.icons.Icons.Outlined.Tv, "Emulacja i ekran", "Obraz, zapis gry, emulatory konsol") {
                 onClose()
                 actions.openEmulationSettings()
             }

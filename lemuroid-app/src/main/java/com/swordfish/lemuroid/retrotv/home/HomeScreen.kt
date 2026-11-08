@@ -240,18 +240,9 @@ private fun TopNav(
 
 @Composable
 private fun Logo() {
+    // To samo logo co w menu bocznym i w aplikacji na telefonie.
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(K.card),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Text("+", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(2.dp))
-            Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFFFF7A59)))
-            Spacer(Modifier.width(2.dp))
-            Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFF9B8CFF)))
-        }
+        PadLogo(Modifier.size(34.dp))
         Text("RETRO TV", color = K.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 1.sp)
     }
 }

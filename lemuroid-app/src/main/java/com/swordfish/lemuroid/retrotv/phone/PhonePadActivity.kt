@@ -223,6 +223,9 @@ class PhonePadActivity : ComponentActivity() {
             return
         }
         connecting = true
+        // Wybrany na telefonie wygląd pada (auto = wg konsoli na telewizorze).
+        val layout = prefs.getString("pad_layout", "auto") ?: "auto"
+        js("window.rtvLayout=" + if (layout == "auto") "null" else JSONObject.quote(layout))
         // Zapamiętany telewizor: łączymy od razu, bez szukania w sieci.
         val last = prefs.getString("last_host", null)
         val lastHost = last?.substringBefore(':')?.takeIf { it.isNotBlank() }

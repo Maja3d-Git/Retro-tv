@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -43,8 +44,6 @@ import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
 import com.swordfish.lemuroid.retrotv.ui.TvButton
 import kotlinx.coroutines.launch
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.asRequestBody
 
 /** Ekran startowy aplikacji na telefonie: pad, wysyłanie gier, gra online. */
 class PhoneHomeActivity : ComponentActivity() {
@@ -116,22 +115,27 @@ class PhoneHomeActivity : ComponentActivity() {
         tvCode: String,
         apk: java.io.File,
     ): String {
-        val client =
-            okhttp3.OkHttpClient.Builder()
-                .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
-                .writeTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                .build()
-        val body = apk.asRequestBody("application/vnd.android.package-archive".toMediaTypeOrNull())
-        val request =
-            okhttp3.Request.Builder()
-                .url("http://$hostPort/upload?k=${android.net.Uri.encode(tvCode)}&name=retro-tv.apk")
-                .put(body)
-                .build()
-        client.newCall(request).execute().use { r ->
-            val text = r.body?.string().orEmpty()
-            if (!r.isSuccessful) throw java.io.IOException(text.ifBlank { "telewizor odpowiedział kodem ${r.code}" })
-            return text.ifBlank { "Wysłano – zatwierdź instalację na telewizorze" }
+        // Zwykłe gniazdo TCP (jak przy wysyłaniu gier) – połączenie tylko w sieci domowej, z kodem telewizora.
+        val host = hostPort.substringBefore(':')
+        val port = hostPort.substringAfter(':', "").toIntOrNull() ?: com.swordfish.lemuroid.retrotv.pad.PhonePadServer.HTTP_PORT
+        java.net.Socket().use { socket ->
+            socket.connect(java.net.InetSocketAddress(host, port), 8_000)
+            socket.soTimeout = 120_000
+            val out = java.io.BufferedOutputStream(socket.getOutputStream())
+            val header =
+                "PUT /upload?k=${android.net.Uri.encode(tvCode)}&name=retro-tv.apk HTTP/1.1\r\n" +
+                    "Host: $host:$port\r\n" +
+                    "Content-Type: application/vnd.android.package-archive\r\n" +
+                    "Content-Length: ${apk.length()}\r\n" +
+                    "Connection: close\r\n\r\n"
+            out.write(header.toByteArray())
+            apk.inputStream().use { it.copyTo(out, 128 * 1024) }
+            out.flush()
+            val reply = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
+            val status = reply.substringBefore("\r\n")
+            val body = reply.substringAfter("\r\n\r\n", "").trim()
+            if (!status.contains(" 200 ")) throw java.io.IOException(body.ifBlank { status.ifBlank { "brak odpowiedzi telewizora" } })
+            return body.ifBlank { "Wysłano – zatwierdź instalację na telewizorze" }
         }
     }
 
@@ -188,12 +192,9 @@ class PhoneHomeActivity : ComponentActivity() {
                 .padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // Nagłówek jak na telewizorze.
+            // Nagłówek jak na telewizorze (to samo logo).
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                androidx.compose.foundation.layout.Box(
-                    Modifier.height(36.dp).width(36.dp).clip(RoundedCornerShape(10.dp)).background(K.card),
-                    contentAlignment = androidx.compose.ui.Alignment.Center,
-                ) { Text("+", color = K.text, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                com.swordfish.lemuroid.retrotv.home.PadLogo(Modifier.height(36.dp).width(36.dp))
                 Spacer(Modifier.width(10.dp))
                 Text("RETRO TV", color = K.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 1.sp)
             }
@@ -218,6 +219,20 @@ class PhoneHomeActivity : ComponentActivity() {
 
             BigTile("Pad", "Graj telefonem na telewizorze", primary = true) {
                 if (remembered != null) PhonePadActivity.start(this@PhoneHomeActivity, code.trim().lowercase()) else scanQr { error = it }
+            }
+            // Wygląd pada: automatycznie (wg konsoli na telewizorze) albo stały układ.
+            var padLayout by remember { mutableStateOf(prefs.getString("pad_layout", "auto") ?: "auto") }
+            Text("Wygląd pada", color = K.muted, fontSize = 13.sp)
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf("auto" to "Auto", "two" to "NES", "snes" to "SNES", "genesis" to "Sega", "gba" to "GBA", "full" to "Pełny").forEach { (v, l) ->
+                    TvButton(if (padLayout == v) "✓ $l" else l, primary = padLayout == v, onClick = {
+                        padLayout = v
+                        prefs.edit().putString("pad_layout", v).apply()
+                    })
+                }
             }
             BigTile("Dołącz do gry online", "Wpisz albo zeskanuj kod pokoju gospodarza") {
                 startActivity(Intent(this@PhoneHomeActivity, NetplayGuestActivity::class.java))

@@ -38,7 +38,7 @@ import com.swordfish.lemuroid.retrotv.ui.K
 import com.swordfish.lemuroid.retrotv.ui.Panel
 import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
-import com.swordfish.lemuroid.retrotv.ui.SectionTitle
+import com.swordfish.lemuroid.retrotv.ui.Heading
 import com.swordfish.lemuroid.retrotv.ui.TvButton
 import com.swordfish.lemuroid.retrotv.ui.TvChoice
 import com.swordfish.lemuroid.retrotv.ui.TvToggle
@@ -80,7 +80,7 @@ class EmulationSettingsActivity : ComponentActivity() {
             Text("Zmiany działają od następnego uruchomienia gry.", color = K.muted, fontSize = 15.sp)
 
             // ---------- obraz ----------
-            SectionTitle("Obraz", "Jak wyglądają piksele na telewizorze")
+            Heading("Obraz", "Jak wyglądają piksele na telewizorze")
             var shader by remember { mutableStateOf(prefs.getString(key(R.string.pref_key_shader_filter), "auto") ?: "auto") }
             Panel {
                 listOf(
@@ -116,7 +116,7 @@ class EmulationSettingsActivity : ComponentActivity() {
             }
 
             // ---------- gra ----------
-            SectionTitle("Gra", null)
+            Heading("Gra")
             Panel {
                 Toggle("Zapisuj grę automatycznie przy wyjściu („Kontynuuj”)", R.string.pref_key_autosave, true)
                 Toggle("Wibracje pada", R.string.pref_key_enable_rumble, false)
@@ -127,13 +127,13 @@ class EmulationSettingsActivity : ComponentActivity() {
             // ---------- rdzenie ----------
             val multi = remember { GameSystem.all().filter { it.systemCoreConfigs.size > 1 }.sortedBy { getString(it.titleResId) } }
             if (multi.isNotEmpty()) {
-                SectionTitle("Emulatory konsol", "Gdy gra źle działa, spróbuj innego emulatora tej konsoli")
+                Heading("Emulatory konsol", "Gdy gra źle działa, spróbuj innego emulatora tej konsoli")
                 multi.forEach { system ->
                     val prefKey = CoresSelection.computeSystemPreferenceKey(system.id)
                     var selected by remember {
                         mutableStateOf(prefs.getString(prefKey, null) ?: system.systemCoreConfigs.first().coreID.coreName)
                     }
-                    Text(getString(system.titleResId), color = K.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(getString(system.titleResId), color = K.muted, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     Panel {
                         system.systemCoreConfigs.forEach { cfg ->
                             TvChoice(cfg.coreID.coreDisplayName, selected == cfg.coreID.coreName) {

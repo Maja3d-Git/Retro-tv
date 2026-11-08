@@ -168,7 +168,7 @@ fun FolderBrowser(
 
     Box(Modifier.fillMaxSize().background(K.bg).tvPane().padding(horizontal = 40.dp, vertical = 28.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, color = K.text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = com.swordfish.lemuroid.retrotv.ui.RetroTvTheme.display)
             Text(
                 current?.path ?: "Wybierz pamięć",
                 color = K.muted,

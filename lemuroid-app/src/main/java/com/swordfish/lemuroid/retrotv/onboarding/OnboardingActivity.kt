@@ -112,7 +112,7 @@ class OnboardingActivity : ComponentActivity() {
         title: String,
         text: String,
     ) {
-        Text(title, color = K.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+        Text(title, color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
         Text(text, color = K.muted, fontSize = 16.sp, lineHeight = 23.sp)
         Spacer(Modifier.height(4.dp))
     }

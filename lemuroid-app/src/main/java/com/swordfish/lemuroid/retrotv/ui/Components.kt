@@ -177,6 +177,32 @@ fun SectionTitle(
 }
 
 
+/**
+ * Skala tekstu Retro TV (jedna w całej aplikacji):
+ * tytuł ekranu 30 sp ([SectionTitle]), nagłówek części 20 sp ([Heading]), tytuł okna 22 sp,
+ * tekst 15 sp, opisy 14 sp, drobne 13 sp.
+ */
+object TextScale {
+    val screen = 30.sp
+    val dialog = 22.sp
+    val heading = 20.sp
+    val body = 15.sp
+    val note = 14.sp
+    val small = 13.sp
+}
+
+/** Nagłówek części ekranu (mniejszy niż tytuł ekranu). */
+@Composable
+fun Heading(
+    title: String,
+    subtitle: String? = null,
+) {
+    Column(Modifier.padding(top = 8.dp, bottom = 6.dp)) {
+        Text(title, color = K.text, fontSize = TextScale.heading, fontWeight = FontWeight.Bold)
+        if (subtitle != null) Text(subtitle, color = K.muted, fontSize = TextScale.note)
+    }
+}
+
 /** Ustawia domyślną czcionkę Retro TV dla całej zawartości. */
 @Composable
 fun RetroTvContent(content: @Composable () -> Unit) {

@@ -360,7 +360,7 @@ private fun UpdatesSection(
 private fun AppearanceSection(activity: ComponentActivity) {
     val current = remember { RetroTvTheme.mode(activity) }
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SectionTitle("Wygląd", "Motyw Kartridż: jasny plastik albo grafitowa obudowa")
+        SectionTitle("Wygląd", "Motyw aplikacji: czarny albo jasny")
         Panel {
             ThemeMode.values().forEach { mode ->
                 TvChoice(mode.label, mode == current) {

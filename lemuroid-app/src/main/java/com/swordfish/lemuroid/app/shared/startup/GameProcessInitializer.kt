@@ -8,7 +8,8 @@ import timber.log.Timber
 class GameProcessInitializer : Initializer<Unit> {
     override fun create(context: Context) {
         Timber.i("Requested initialization of game process tasks")
-        GameProcessLock.acquire(context.applicationContext)
+        // Retro TV: blokadę zakłada dopiero ekran gry (BaseGameActivity). W procesie gry działa też
+        // poczekalnia pokoju – sama blokada procesu blokowała wtedy uruchomienie gry.
     }
 
     override fun dependencies(): List<Class<out Initializer<*>>> {

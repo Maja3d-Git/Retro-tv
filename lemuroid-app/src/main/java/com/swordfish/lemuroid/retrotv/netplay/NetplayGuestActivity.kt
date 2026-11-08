@@ -82,6 +82,19 @@ class NetplayGuestActivity : ComponentActivity() {
     private var inLobby = false
     private var codeInput by mutableStateOf("")
 
+    private val roomScanner =
+        registerForActivityResult(com.journeyapps.barcodescanner.ScanContract()) { result ->
+            val raw = result.contents ?: return@registerForActivityResult
+            val room = runCatching { android.net.Uri.parse(raw).getQueryParameter("kod") }.getOrNull()
+                ?: raw.trim().takeIf { it.length == 6 && it.all { c -> c.isLetterOrDigit() } }
+            if (room.isNullOrBlank()) {
+                status = "To nie jest kod pokoju Retro TV."
+                return@registerForActivityResult
+            }
+            codeInput = room.uppercase()
+            join(codeInput)
+        }
+
     private val isPhone by lazy { !com.swordfish.lemuroid.app.tv.shared.TVHelper.isTV(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -136,6 +149,20 @@ class NetplayGuestActivity : ComponentActivity() {
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             TvButton("Dołącz", primary = true, enabled = codeInput.length == 6 && status == null, onClick = { join(codeInput) })
+                            if (isPhone) {
+                                TvButton("Zeskanuj kod", onClick = {
+                                    runCatching {
+                                        roomScanner.launch(
+                                            com.journeyapps.barcodescanner.ScanOptions()
+                                                .setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.QR_CODE)
+                                                .setPrompt("Zeskanuj kod QR pokoju z telewizora gospodarza")
+                                                .setBeepEnabled(false)
+                                                .setOrientationLocked(true)
+                                                .setCaptureActivity(com.swordfish.lemuroid.retrotv.phone.PortraitCaptureActivity::class.java),
+                                        )
+                                    }
+                                })
+                            }
                             TvButton("Anuluj", onClick = { finish() })
                         }
                         status?.let { Text(it, color = K.muted, fontSize = 15.sp) }

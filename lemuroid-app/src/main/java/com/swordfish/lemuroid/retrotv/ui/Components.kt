@@ -251,3 +251,20 @@ fun Modifier.tvPane(): Modifier =
             }
         }
         .focusGroup()
+
+/** Obszar ekranu z menu u góry: strzałki w lewo/prawo nie wyprowadzają fokusu poza obszar. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+fun Modifier.tvRowPane(): Modifier =
+    this
+        .focusProperties {
+            exit = { direction ->
+                if (direction == androidx.compose.ui.focus.FocusDirection.Left ||
+                    direction == androidx.compose.ui.focus.FocusDirection.Right
+                ) {
+                    androidx.compose.ui.focus.FocusRequester.Cancel
+                } else {
+                    androidx.compose.ui.focus.FocusRequester.Default
+                }
+            }
+        }
+        .focusGroup()

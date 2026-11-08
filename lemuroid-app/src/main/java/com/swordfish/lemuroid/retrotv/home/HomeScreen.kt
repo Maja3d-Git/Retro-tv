@@ -47,6 +47,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Tv
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.shape.CircleShape
+import com.swordfish.lemuroid.retrotv.ui.tvRowPane
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -139,15 +147,17 @@ fun HomeScreen(
     }
     val showDetails: (Game) -> Unit = { g -> open(Screen.Details(g.id, (screen as? Screen.Details)?.from ?: screen)) }
 
-    BackHandler(enabled = screen != Screen.Start) {
+    var settingsOpen by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = screen != Screen.Start && !settingsOpen) {
         val s = screen
         open(if (s is Screen.Details) s.from else Screen.Start)
     }
 
     Box(Modifier.fillMaxSize().background(K.bg)) {
-        Row(Modifier.fillMaxSize()) {
-            Rail(state, screen, actions, onOpen = { open(it) })
-            Box(Modifier.weight(1f).fillMaxHeight().tvPane()) {
+        Column(Modifier.fillMaxSize()) {
+            TopNav(actions, onStart = { open(Screen.Start) }, onSearch = { open(Screen.Search) }, onSettings = { settingsOpen = true })
+            Box(Modifier.weight(1f).fillMaxWidth().tvRowPane()) {
                 when (val s = screen) {
                     Screen.Start -> StartContent(state, topGames, actions, showDetails, onOpenSystem = { open(Screen.Library(it)) }, onSearch = { open(Screen.Search) })
                     Screen.Search -> SearchContent(viewModel, state, actions, showDetails)
@@ -164,6 +174,7 @@ fun HomeScreen(
                 }
             }
         }
+        if (settingsOpen) SettingsPanel(actions) { settingsOpen = false }
         if (busy) {
             Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) {
                 Text("Wczytywanie…", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -174,40 +185,211 @@ fun HomeScreen(
 
 // ---------- menu boczne ----------
 
+/** Menu u góry: logo, sekcje, szukanie, stan padów, godzina i zębatka z ustawieniami. */
 @Composable
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-private fun Rail(
-    state: HomeViewModel.HomeState,
-    screen: Screen,
+private fun TopNav(
     actions: HomeActions,
-    onOpen: (Screen) -> Unit,
+    onStart: () -> Unit,
+    onSearch: () -> Unit,
+    onSettings: () -> Unit,
 ) {
-    val context = LocalContext.current
     val startFocus = remember { FocusRequester() }
-    Column(
+    var now by remember { mutableStateOf(Date()) }
+    var pads by remember { mutableStateOf(countPads()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(15_000)
+            now = Date()
+            pads = countPads()
+        }
+    }
+    val phones by PhonePadServer.phones.collectAsState()
+    Row(
         Modifier
-            .width(220.dp)
-            .fillMaxHeight()
-            .background(K.nav)
-            // Strzałka w lewo z treści zawsze trafia na „Start” (bieżącą sekcję), a nie na najbliższy element.
+            .fillMaxWidth()
+            .height(84.dp)
+            // Strzałka w górę z treści zawsze trafia na „Start”.
             .focusProperties { enter = { startFocus } }
-            .tvPane()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .tvRowPane()
+            .padding(horizontal = 40.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        com.swordfish.lemuroid.retrotv.ui.RailHeader(null)
-        // Konsole, wyszukiwanie i szczegóły gier należą do ekranu Start.
-        RailItem("Start", true, modifier = Modifier.focusRequester(startFocus)) { onOpen(Screen.Start) }
-        RailItem("Dołącz do gry", false, onClick = actions::joinOnline)
+        Logo()
+        Spacer(Modifier.width(20.dp))
+        NavPill("Start", selected = true, modifier = Modifier.focusRequester(startFocus), onClick = onStart)
+        NavPill("Gry i ROM-y", selected = false, onClick = actions::openRomManager)
+        NavPill("Dołącz do gry", selected = false, onClick = actions::joinOnline)
+        Spacer(Modifier.weight(1f))
+        IconPill(androidx.compose.material.icons.Icons.Outlined.Search, "Szukaj gry", onSearch)
+        Chip(if (pads == 0) "Brak pada" else if (pads == 1) "Pad podłączony" else "$pads pady", if (pads > 0) K.ok else K.muted)
+        if (phones.isNotEmpty()) Chip(if (phones.size == 1) "1 telefon" else "${phones.size} telefony", K.ok)
+        Text(
+            SimpleDateFormat("HH:mm", Locale.getDefault()).format(now),
+            color = K.muted,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 6.dp),
+        )
+        IconPill(androidx.compose.material.icons.Icons.Outlined.Settings, "Ustawienia", onSettings)
+    }
+}
 
-        RailLabel("BIBLIOTEKA")
-        RailItem("Gry i ROM-y", false, onClick = actions::openRomManager)
+@Composable
+private fun Logo() {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(K.card),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Text("+", color = K.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(2.dp))
+            Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFFFF7A59)))
+            Spacer(Modifier.width(2.dp))
+            Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFF9B8CFF)))
+        }
+        Text("RETRO TV", color = K.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 1.sp)
+    }
+}
 
-        RailLabel("USTAWIENIA")
-        RailItem("Kontrolery", false, onClick = actions::openControllers)
-        RailItem("Emulacja i ekran", false, onClick = actions::openEmulationSettings)
-        RailItem("System", false, onClick = actions::openSystem)
+@Composable
+private fun NavPill(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    Box(
+        modifier
+            .height(44.dp)
+            .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(24.dp))
+            .padding(3.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(if (selected) K.p.activeBg else Color.Transparent)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = if (selected) K.p.activeFg else K.muted,
+            fontSize = 16.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun IconPill(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    Box(
+        modifier
+            .size(48.dp)
+            .border(3.dp, if (focused) K.coral else Color.Transparent, CircleShape)
+            .padding(3.dp)
+            .clip(CircleShape)
+            .background(if (focused) K.p.activeBg else K.card)
+            .clickable(interactionSource = source, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Icon(icon, contentDescription = description, tint = if (focused) K.p.activeFg else K.text, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** Panel ustawień pod zębatką: Kontrolery, Emulacja i ekran, System. */
+@Composable
+private fun SettingsPanel(
+    actions: HomeActions,
+    onClose: () -> Unit,
+) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    BackHandler { onClose() }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0x99000000))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Column(
+            Modifier
+                .padding(top = 80.dp, end = 40.dp)
+                .width(390.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF121212))
+                .focusGroup()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                "USTAWIENIA",
+                color = K.muted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.padding(start = 14.dp, top = 6.dp, bottom = 8.dp),
+            )
+            SettingsItem(androidx.compose.material.icons.Icons.Outlined.SportsEsports, "Kontrolery", "Pady, telefon jako pad, kod QR", Modifier.focusRequester(first)) {
+                onClose()
+                actions.openControllers()
+            }
+            SettingsItem(androidx.compose.material.icons.Icons.Outlined.Tv, "Emulacja i ekran", "Filtry, proporcje, rdzenie") {
+                onClose()
+                actions.openEmulationSettings()
+            }
+            SettingsItem(androidx.compose.material.icons.Icons.Outlined.Tune, "System", "Aktualizacje, wygląd, kopie zapisów, dziennik") {
+                onClose()
+                actions.openSystem()
+            }
+            Box(Modifier.padding(horizontal = 14.dp, vertical = 8.dp).fillMaxWidth().height(1.dp).background(K.line))
+            Text(
+                "Retro TV ${com.swordfish.lemuroid.BuildConfig.VERSION_NAME}",
+                color = K.muted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(start = 14.dp, bottom = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
+    val fg = if (focused) K.p.activeFg else K.text
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(66.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (focused) K.p.activeBg else Color.Transparent)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        androidx.compose.material3.Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(24.dp))
+        Column {
+            Text(title, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = if (focused) Color(0xFF555555) else K.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -291,36 +473,15 @@ private fun TopBar(
     title: String,
     subtitle: String?,
     state: HomeViewModel.HomeState,
-    onSearch: (() -> Unit)? = null,
+    @Suppress("UNUSED_PARAMETER") onSearch: (() -> Unit)? = null,
 ) {
-    var now by remember { mutableStateOf(Date()) }
-    var pads by remember { mutableStateOf(countPads()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(15_000)
-            now = Date()
-            pads = countPads()
-        }
-    }
+    // Pady, telefony i godzina są w menu u góry – tu tylko tytuł sekcji.
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
+            if (title != "Start") Text(title, color = K.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
             if (subtitle != null) Text(subtitle, color = K.muted, fontSize = 14.sp)
         }
-        if (onSearch != null) {
-            TvButton("Szukaj gry", onClick = onSearch)
-            Spacer(Modifier.width(8.dp))
-        }
-        if (state.indexing) Chip("Skanowanie biblioteki…", K.accent)
-        Spacer(Modifier.width(8.dp))
-        Chip(if (pads == 0) "Brak pada" else if (pads == 1) "1 pad" else "$pads pady", if (pads > 0) K.ok else K.muted)
-        val phones by PhonePadServer.phones.collectAsState()
-        if (phones.isNotEmpty()) {
-            Spacer(Modifier.width(8.dp))
-            Chip(if (phones.size == 1) "1 telefon" else "${phones.size} telefony", K.ok)
-        }
-        Spacer(Modifier.width(8.dp))
-        Chip(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), null)
+        if (state.indexing) Chip("Skanowanie biblioteki…", K.coral)
     }
 }
 
@@ -370,8 +531,8 @@ private fun StartContent(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 32.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
+            .padding(start = 48.dp, end = 48.dp, top = 4.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         val totalMs = PlayStats.totalMs(LocalContext.current)
         TopBar("Start", if (totalMs > 60_000) "Łączny czas gry: ${PlayStats.format(totalMs)}" else null, state, onSearch = onSearch)
@@ -455,28 +616,28 @@ private fun ContinueCard(
     Row(
         Modifier
             .fillMaxWidth()
-            .height(190.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .height(230.dp)
+            .clip(RoundedCornerShape(22.dp))
             .background(K.card),
     ) {
-        Cover(game, Modifier.width(260.dp).fillMaxHeight(), titleSize = 22)
+        Cover(game, Modifier.width(380.dp).fillMaxHeight(), titleSize = 24)
         Column(
             Modifier.weight(1f).padding(horizontal = 26.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("KONTYNUUJ GRĘ", color = K.coral, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Text("KONTYNUUJ", color = K.coral, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
             Spacer(Modifier.height(6.dp))
             Text(
                 game.displayName(),
                 color = K.text,
-                fontSize = 24.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = RetroTvTheme.display,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text("${systemName(context, game)} · ${lastPlayed(game)}", color = K.muted, fontSize = 14.sp)
-            Spacer(Modifier.height(14.dp))
+            Text("${systemName(context, game)} · ${lastPlayed(game)}", color = K.muted, fontSize = 15.sp)
+            Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TvButton("Graj", primary = true, onClick = { actions.play(game) }, modifier = Modifier.focusRequester(focus))
                 TvButton("Z drużyną", onClick = { actions.playTeam(game) })

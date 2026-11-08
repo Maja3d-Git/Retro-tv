@@ -31,7 +31,7 @@ data class Palette(
 
 enum class ThemeMode(val label: String) {
     LIGHT("Jasny"),
-    DARK("Ciemny"),
+    DARK("Czarny"),
     AUTO("Automatycznie (ciemny wieczorem)"),
 }
 
@@ -56,29 +56,30 @@ object RetroTvTheme {
             tiles = listOf(Color(0xFF5847C2), Color(0xFFB3261E), Color(0xFF3F7D5C), Color(0xFFB97A12)),
         )
 
+    /** Czarny motyw (domyślny): czarne tło, białe przyciski, pomarańczowe zaznaczenie. */
     val Dark =
         Palette(
             isDark = true,
-            bg = Color(0xFF24242A),
-            nav = Color(0xFF1C1C21),
-            card = Color(0xFF2F2F36),
-            line = Color(0xFF3D3D46),
-            btn = Color(0xFF3A3A42),
-            text = Color(0xFFECEAE5),
-            muted = Color(0xFFA8A5B2),
-            accent = Color(0xFF8E80F0),
-            onAccent = Color(0xFF140F33),
-            coral = Color(0xFFFF7A70),
-            ok = Color(0xFF6BD39A),
+            bg = Color(0xFF000000),
+            nav = Color(0xFF0B0B0B),
+            card = Color(0xFF151515),
+            line = Color(0xFF2C2C2C),
+            btn = Color(0xFF1F1F1F),
+            text = Color(0xFFF2F2F2),
+            muted = Color(0xFFA6A6A6),
+            accent = Color(0xFFFFFFFF),
+            onAccent = Color(0xFF000000),
+            coral = Color(0xFFFF7A59),
+            ok = Color(0xFF5BD69A),
             warn = Color(0xFFE8B04A),
-            activeBg = Color(0xFFECEAE5),
-            activeFg = Color(0xFF24242A),
+            activeBg = Color(0xFFFFFFFF),
+            activeFg = Color(0xFF000000),
             tiles = listOf(Color(0xFF6A5BD6), Color(0xFFB83A33), Color(0xFF3F8A62), Color(0xFFB98322)),
         )
 
     /** Bieżąca paleta; ustawiana przez [apply] przy tworzeniu ekranu. */
     @Volatile
-    var palette: Palette = Light
+    var palette: Palette = Dark
         private set
 
     private const val PREFS = "retrotv"
@@ -86,7 +87,7 @@ object RetroTvTheme {
 
     fun mode(context: Context): ThemeMode {
         val name = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_THEME, null)
-        return ThemeMode.values().firstOrNull { it.name == name } ?: ThemeMode.LIGHT
+        return ThemeMode.values().firstOrNull { it.name == name } ?: ThemeMode.DARK
     }
 
     fun setMode(

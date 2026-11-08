@@ -428,6 +428,7 @@ object PhonePadServer {
         ) = Triple(code, "text/plain; charset=utf-8", msg.toByteArray())
         if (query["k"] != token(appContext)) return fail("403 Forbidden", "Nieprawidłowy kod – zeskanuj QR ponownie")
         val name = (query["name"] ?: "").substringAfterLast('/').substringAfterLast('\\')
+        if (name.lowercase().endsWith(".apk")) return receiveUpdate(headers, input)
         if (!com.swordfish.lemuroid.retrotv.roms.RomFiles.isRom(name)) return fail("415 Unsupported Media Type", "To nie jest plik gry: $name")
         val length = headers["content-length"]?.toLongOrNull() ?: return fail("411 Length Required", "Brak rozmiaru pliku")
         if (length > com.swordfish.lemuroid.retrotv.roms.RomFiles.freeBytes(appContext) - 50L * 1024 * 1024) {
@@ -458,6 +459,58 @@ object PhonePadServer {
         main.removeCallbacks(rescanRunnable)
         main.postDelayed(rescanRunnable, 1500)
         return Triple("200 OK", "text/plain; charset=utf-8", (if (unpacked > 0) "OK: $unpacked gier" else "OK").toByteArray())
+    }
+
+    /** Aktualizacja wysłana z telefonu: zapis, sprawdzenie, że to Retro TV, i uruchomienie instalatora. */
+    private fun receiveUpdate(
+        headers: Map<String, String>,
+        input: java.io.InputStream,
+    ): Triple<String, String, ByteArray> {
+        fun fail(
+            code: String,
+            msg: String,
+        ) = Triple(code, "text/plain; charset=utf-8", msg.toByteArray())
+        val length = headers["content-length"]?.toLongOrNull() ?: return fail("411 Length Required", "Brak rozmiaru pliku")
+        if (length > 300L * 1024 * 1024) return fail("413 Payload Too Large", "Plik jest za duży")
+        val dir = java.io.File(appContext.cacheDir, "updates").apply { mkdirs() }
+        val target = java.io.File(dir, "retro-tv-z-telefonu.apk")
+        target.outputStream().use { out ->
+            val buffer = ByteArray(128 * 1024)
+            var left = length
+            while (left > 0) {
+                val read = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
+                if (read < 0) break
+                out.write(buffer, 0, read)
+                left -= read
+            }
+            if (left > 0) {
+                target.delete()
+                return fail("400 Bad Request", "Przesyłanie przerwane")
+            }
+        }
+        @Suppress("DEPRECATION")
+        val info = appContext.packageManager.getPackageArchiveInfo(target.path, 0)
+        if (info?.packageName != appContext.packageName) {
+            target.delete()
+            return fail("415 Unsupported Media Type", "To nie jest aplikacja Retro TV")
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 26 && !appContext.packageManager.canRequestPackageInstalls()) {
+            notify("Zezwól Retro TV na instalowanie aplikacji: System → Aktualizacje")
+            return fail("403 Forbidden", "Telewizor nie ma zgody na instalowanie. Na telewizorze: System → Aktualizacje → zezwól.")
+        }
+        Timber.i("Odebrano aktualizację z telefonu (%d B)", length)
+        main.post {
+            runCatching {
+                val uri = androidx.core.content.FileProvider.getUriForFile(appContext, "${appContext.packageName}.retrotv.files", target)
+                appContext.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    },
+                )
+            }.onFailure { Timber.e(it, "Nie udało się uruchomić instalatora") }
+        }
+        return Triple("200 OK", "text/plain; charset=utf-8", "OK – zatwierdź instalację na telewizorze".toByteArray())
     }
 
     private val rescanRunnable =

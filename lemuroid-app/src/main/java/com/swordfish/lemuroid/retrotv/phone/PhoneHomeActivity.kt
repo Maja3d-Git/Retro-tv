@@ -41,6 +41,8 @@ import com.swordfish.lemuroid.retrotv.ui.RetroTvContent
 import com.swordfish.lemuroid.retrotv.ui.RetroTvTheme
 import com.swordfish.lemuroid.retrotv.ui.TvButton
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.asRequestBody
 
 /** Ekran startowy aplikacji na telefonie: pad, wysyłanie gier, gra online. */
 class PhoneHomeActivity : ComponentActivity() {
@@ -107,9 +109,36 @@ class PhoneHomeActivity : ComponentActivity() {
     }
 
     @Composable
+    /** Wysyła plik aplikacji na telewizor (PUT /upload), który sam uruchamia instalator. */
+    private fun uploadApk(
+        hostPort: String,
+        tvCode: String,
+        apk: java.io.File,
+    ): String {
+        val client =
+            okhttp3.OkHttpClient.Builder()
+                .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+        val body = apk.asRequestBody("application/vnd.android.package-archive".toMediaTypeOrNull())
+        val request =
+            okhttp3.Request.Builder()
+                .url("http://$hostPort/upload?k=${android.net.Uri.encode(tvCode)}&name=retro-tv.apk")
+                .put(body)
+                .build()
+        client.newCall(request).execute().use { r ->
+            val text = r.body?.string().orEmpty()
+            if (!r.isSuccessful) throw java.io.IOException(text.ifBlank { "telewizor odpowiedział kodem ${r.code}" })
+            return text.ifBlank { "Wysłano – zatwierdź instalację na telewizorze" }
+        }
+    }
+
+    @Composable
     private fun Screen() {
         var code by remember { mutableStateOf(prefs.getString("code", "") ?: "") }
         var error by remember { mutableStateOf<String?>(null) }
+        var tvStatus by remember { mutableStateOf<String?>(null) }
         var release by remember { mutableStateOf<com.swordfish.lemuroid.retrotv.update.ReleaseInfo?>(null) }
         var updateStatus by remember { mutableStateOf<String?>(null) }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -207,6 +236,35 @@ class PhoneHomeActivity : ComponentActivity() {
                 TvButton("Połącz kodem", modifier = Modifier.fillMaxWidth(), onClick = {
                     validCode()?.let { PhonePadActivity.start(this@PhoneHomeActivity, it) }
                 })
+            }
+
+            Card("Telewizor") {
+                TvButton("Zaktualizuj Retro TV na telewizorze", modifier = Modifier.fillMaxWidth(), onClick = {
+                    val host = prefs.getString("last_host", null)
+                    val c = code.trim().lowercase()
+                    if (host.isNullOrBlank() || c.isEmpty()) {
+                        tvStatus = "Najpierw połącz telefon z telewizorem (zeskanuj kod QR z Kontrolerów)."
+                        return@TvButton
+                    }
+                    scope.launch {
+                        try {
+                            tvStatus = "Sprawdzam najnowszą wersję…"
+                            val r = com.swordfish.lemuroid.retrotv.update.Updater.fetchLatest()
+                            val apk =
+                                com.swordfish.lemuroid.retrotv.update.Updater.download(this@PhoneHomeActivity, r) { p ->
+                                    tvStatus = "Pobieram ${r.versionName}… ${(p * 100).toInt()}%"
+                                }
+                            tvStatus = "Wysyłam na telewizor…"
+                            tvStatus = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { uploadApk(host, c, apk) }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            tvStatus = "Nie udało się: ${e.message}. Retro TV musi być otwarte na telewizorze, w tej samej sieci Wi-Fi."
+                        }
+                    }
+                })
+                Text("Telefon pobierze nową wersję i wyśle ją na telewizor – przydaje się, gdy telewizor nie może pobrać jej sam.", color = K.muted, fontSize = 13.sp)
+                tvStatus?.let { Text(it, color = K.text, fontSize = 14.sp) }
             }
 
             Card("Gry") {

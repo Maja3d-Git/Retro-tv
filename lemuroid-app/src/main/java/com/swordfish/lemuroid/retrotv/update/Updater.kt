@@ -42,6 +42,9 @@ object Updater {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
+            // HTTP/1.1: część sieci i serwerów zrywa strumienie HTTP/2 (REFUSED_STREAM).
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -54,6 +57,8 @@ object Updater {
     suspend fun fetchLatest(): ReleaseInfo =
         try {
             fetchLatestApi()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.w(e, "API GitHuba niedostępne, sprawdzam przez stronę wydań")
             try {

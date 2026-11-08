@@ -222,14 +222,20 @@ private fun TabItem(
             .fillMaxWidth()
             .height(42.dp)
             .onFocusChanged { if (it.isFocused) onSelect() }
+            .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+            .padding(3.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) K.p.activeBg else Color.Transparent)
-            .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(10.dp))
+            .background(if (focused) K.p.activeBg else if (selected) K.btn else Color.Transparent)
             .clickable(interactionSource = source, indication = null, onClick = onSelect)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Text(label, color = if (selected) K.p.activeFg else K.text, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+        Text(
+            label,
+            color = if (focused) K.p.activeFg else if (selected) K.text else K.muted,
+            fontSize = 15.sp,
+            fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Normal,
+        )
     }
 }
 

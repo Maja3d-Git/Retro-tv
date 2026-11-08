@@ -321,8 +321,10 @@ class RetroGameMenuActivity : ImmersiveActivity() {
             modifier
                 .fillMaxWidth()
                 .height(50.dp)
+                .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(14.dp))
+                .padding(3.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (focused) K.accent else Color.Transparent)
+                .background(if (focused) K.p.activeBg else Color.Transparent)
                 .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -331,12 +333,12 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                 label,
                 color =
                     when {
-                        focused -> K.onAccent
+                        focused -> K.p.activeFg
                         !enabled -> K.line
                         danger -> K.coral
                         else -> K.text
                     },
-                fontSize = 17.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -346,7 +348,7 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                 Spacer(Modifier.width(10.dp))
                 Text(
                     value,
-                    color = if (focused) K.onAccent else K.muted,
+                    color = if (focused) Color(0xFF444444) else K.muted,
                     fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

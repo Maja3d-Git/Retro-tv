@@ -74,15 +74,18 @@ fun TvButton(
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
+    // Zasada zaznaczenia (wszędzie tak samo): białe tło, czarny tekst, pomarańczowa obwódka.
     val bg =
         when {
             !enabled -> K.card
+            focused -> K.p.activeBg
             primary -> K.accent
             else -> K.btn
         }
     val fg =
         when {
             !enabled -> K.muted
+            focused -> K.p.activeFg
             primary -> K.onAccent
             else -> K.text
         }
@@ -115,19 +118,21 @@ fun TvToggle(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (focused) K.btn else Color.Transparent)
-                .border(2.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+                .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+                .padding(3.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (focused) K.p.activeBg else Color.Transparent)
                 .clickable(interactionSource = source, indication = null) { onChange(!checked) }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = K.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Text(label, color = if (focused) K.p.activeFg else K.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Box(
             modifier =
                 Modifier
                     .size(width = 48.dp, height = 28.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(if (checked) K.accent else K.line),
+                    .background(if (checked) K.coral else if (focused) Color(0xFFBDBDBD) else K.line),
             contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
             Box(
@@ -223,8 +228,10 @@ fun TvChoice(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (focused) K.btn else Color.Transparent)
-                .border(2.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+                .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+                .padding(3.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (focused) K.p.activeBg else Color.Transparent)
                 .clickable(interactionSource = source, indication = null, onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -233,15 +240,15 @@ fun TvChoice(
             Modifier
                 .size(22.dp)
                 .clip(RoundedCornerShape(11.dp))
-                .border(2.dp, if (selected) K.accent else K.muted, RoundedCornerShape(11.dp)),
+                .border(2.dp, if (selected) K.coral else if (focused) K.p.activeFg else K.muted, RoundedCornerShape(11.dp)),
             contentAlignment = Alignment.Center,
         ) {
             if (selected) {
-                Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(K.accent))
+                Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(K.coral))
             }
         }
         Spacer(Modifier.width(14.dp))
-        Text(label, color = K.text, fontSize = 15.sp)
+        Text(label, color = if (focused) K.p.activeFg else K.text, fontSize = 15.sp)
     }
 }
 

@@ -271,7 +271,7 @@ private fun NavPill(
             .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(24.dp))
             .padding(3.dp)
             .clip(RoundedCornerShape(22.dp))
-            .background(if (selected) K.p.activeBg else Color.Transparent)
+            .background(if (focused) K.p.activeBg else if (selected) K.btn else Color.Transparent)
             .clickable(interactionSource = source, indication = null, onClick = onClick)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
@@ -280,9 +280,9 @@ private fun NavPill(
             label,
             maxLines = 1,
             softWrap = false,
-            color = if (selected) K.p.activeFg else K.muted,
-            fontSize = 16.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (focused) K.p.activeFg else if (selected) K.text else K.muted,
+            fontSize = 15.sp,
+            fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Medium,
         )
     }
 }

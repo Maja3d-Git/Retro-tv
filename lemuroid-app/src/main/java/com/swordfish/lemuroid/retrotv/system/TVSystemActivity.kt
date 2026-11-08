@@ -160,18 +160,19 @@ private fun SystemScreen(
                         .height(42.dp)
                         .focusRequester(tabs.getValue(s))
                         .onFocusChanged { if (it.isFocused) section = s }
+                        .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(12.dp))
+                        .padding(3.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) K.p.activeBg else Color.Transparent)
-                        .border(3.dp, if (focused) K.coral else Color.Transparent, RoundedCornerShape(10.dp))
+                        .background(if (focused) K.p.activeBg else if (selected) K.btn else Color.Transparent)
                         .clickable(interactionSource = source, indication = null) { section = s }
                         .padding(horizontal = 14.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     Text(
                         s.title,
-                        color = if (selected) K.p.activeFg else K.text,
+                        color = if (focused) K.p.activeFg else if (selected) K.text else K.muted,
                         fontSize = 15.sp,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Normal,
                     )
                 }
             }

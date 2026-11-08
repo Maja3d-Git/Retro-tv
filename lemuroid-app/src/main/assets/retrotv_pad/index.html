@@ -170,7 +170,7 @@ $("#kbSend").addEventListener("click",()=>{send({t:"text",v:$("#kbIn").value});$
 $("#kbIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("#kbSend").click()});
 document.addEventListener("contextmenu",e=>e.preventDefault());
 setInterval(()=>send({t:"ping"}),5000);
-if(NATIVE){const g=document.getElementById("getApp");if(g)g.remove();}
+if(NATIVE){const g=document.getElementById("getApp");if(g)g.remove();const r=document.querySelector(".rot");if(r)r.remove();}
 build();connect();
 })();
 </script>

@@ -63,6 +63,20 @@ import javax.inject.Inject
 class MainTVActivity : BaseTVActivity(), BusyActivity {
     private var pendingTeamGame: Game? = null
     private val REQUEST_LOBBY = 4801
+    private var pendingBiosGame: Game? = null
+    private val REQUEST_BIOS = 4802
+
+    /** Retro TV: przed startem gry sprawdzamy BIOS i zamiast błędu pokazujemy, co wgrać. */
+    private fun biosReady(game: Game): Boolean {
+        val missing = com.swordfish.lemuroid.retrotv.bios.BiosCheck.missingFor(this, game)
+        if (missing.isEmpty()) return true
+        pendingBiosGame = game
+        val system =
+            runCatching { getString(com.swordfish.lemuroid.lib.library.GameSystem.findById(game.systemId).titleResId) }
+                .getOrDefault(game.systemId)
+        startActivityForResult(com.swordfish.lemuroid.retrotv.bios.BiosMissingActivity.intent(this, game, system, missing), REQUEST_BIOS)
+        return false
+    }
 
     @Inject
     lateinit var gameLaunchTaskHandler: GameLaunchTaskHandler
@@ -123,9 +137,12 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
     private val homeActions =
         object : HomeActions {
-            override fun play(game: Game) = gameInteractor.onGamePlay(game)
+            override fun play(game: Game) {
+                if (biosReady(game)) gameInteractor.onGamePlay(game)
+            }
 
             override fun playTeam(game: Game) {
+                if (!biosReady(game)) return
                 pendingTeamGame = game
                 startActivityForResult(
                     com.swordfish.lemuroid.retrotv.netplay.NetplayLobbyActivity.intent(this@MainTVActivity, game.title),
@@ -133,7 +150,9 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
                 )
             }
 
-            override fun restart(game: Game) = gameInteractor.onGameRestart(game)
+            override fun restart(game: Game) {
+                if (biosReady(game)) gameInteractor.onGameRestart(game)
+            }
 
             override fun toggleFavorite(game: Game) = gameInteractor.onFavoriteToggle(game, !game.isFavorite)
 
@@ -187,6 +206,11 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
         super.onActivityResult(requestCode, resultCode, data)
 
         when (requestCode) {
+            REQUEST_BIOS -> {
+                val game = pendingBiosGame
+                pendingBiosGame = null
+                if (resultCode == Activity.RESULT_OK && game != null) gameInteractor.onGamePlay(game)
+            }
             REQUEST_LOBBY -> {
                 // „Rozpocznij grę” albo „Graj sam” w pokoju – uruchamiamy grę (pokój czeka w procesie gry).
                 val game = pendingTeamGame

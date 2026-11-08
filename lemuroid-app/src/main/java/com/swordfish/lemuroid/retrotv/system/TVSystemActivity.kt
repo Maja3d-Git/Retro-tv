@@ -526,13 +526,16 @@ private fun ConsolesSection(activity: ComponentActivity) {
         systems.forEach { sys ->
             val missing = bios?.notDetected?.filter { it.systemID == sys.id }.orEmpty()
             val present = bios?.detected?.filter { it.systemID == sys.id }.orEmpty()
+            val required = com.swordfish.lemuroid.retrotv.bios.BiosCheck.systemRequiresBios(sys)
+            val blocked = required && com.swordfish.lemuroid.retrotv.bios.BiosCheck.systemBlocked(activity, sys)
             val status =
                 when {
                     missing.isEmpty() && present.isEmpty() -> "gotowa – nie wymaga BIOS"
-                    missing.isEmpty() -> "gotowa – BIOS znaleziony"
-                    else -> "brakuje BIOS: " + missing.joinToString(", ") { it.displayName() }
+                    missing.isEmpty() || (required && !blocked) -> "gotowa – BIOS znaleziony"
+                    required -> "wymaga BIOS: " + missing.joinToString(" albo ") { it.displayName() }
+                    else -> "działa; BIOS poprawi zgodność: " + missing.take(2).joinToString(", ") { it.displayName() }
                 }
-            InfoRow(activity.getString(sys.titleResId), status, if (missing.isEmpty()) K.ok else K.warn)
+            InfoRow(activity.getString(sys.titleResId), status, if (blocked) K.warn else K.ok)
         }
         Text(
             "Pliki BIOS wgraj do folderu z grami albo przez „Z telefonu” – Retro TV rozpozna je przy skanowaniu. " +

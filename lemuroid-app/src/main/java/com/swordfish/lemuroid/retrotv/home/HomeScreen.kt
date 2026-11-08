@@ -691,7 +691,12 @@ private fun ConsoleCard(
         Spacer(Modifier.width(12.dp))
         Column {
             Text(info.getName(context), color = K.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(gamesCount(info.count), color = K.muted, fontSize = 13.sp)
+            val biosMissing = remember(info.metaSystem) { com.swordfish.lemuroid.retrotv.bios.BiosCheck.metaBlocked(context, info.metaSystem) }
+            Text(
+                if (biosMissing) "${gamesCount(info.count)} · brakuje BIOS" else gamesCount(info.count),
+                color = if (biosMissing) K.warn else K.muted,
+                fontSize = 13.sp,
+            )
         }
     }
 }

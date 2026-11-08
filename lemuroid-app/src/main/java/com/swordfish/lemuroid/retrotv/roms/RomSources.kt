@@ -34,7 +34,7 @@ data class RomEntry(
 object RomFiles {
     /** Rozszerzenia plików, które Retro TV potrafi uruchomić (plus archiwa ZIP). */
     val extensions: Set<String> by lazy {
-        (GameSystem.all().flatMap { it.supportedExtensions } + listOf("zip", "cue", "bin", "m3u", "chd", "iso"))
+        (GameSystem.all().flatMap { it.supportedExtensions } + listOf("zip", "cue", "bin", "m3u", "chd", "iso", "img", "rom"))
             .map { it.lowercase(Locale.US) }
             .toSet()
     }

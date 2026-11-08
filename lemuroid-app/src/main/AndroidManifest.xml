@@ -146,6 +146,10 @@
             android:theme="@style/LemuroidMaterialTheme.Game" />
 
         <activity
+            android:name="com.swordfish.lemuroid.retrotv.bios.BiosMissingActivity"
+            android:exported="false"
+            android:theme="@style/LemuroidMaterialTheme" />
+        <activity
             android:name="com.swordfish.lemuroid.retrotv.controllers.ControllersActivity"
             android:exported="false"
             android:theme="@style/LemuroidMaterialTheme" />
@@ -214,7 +218,6 @@
             android:name="com.swordfish.lemuroid.retrotv.phone.PhonePadActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation"
-            android:screenOrientation="sensorLandscape"
             android:theme="@style/LemuroidMaterialTheme.Game" />
         <activity
             android:name="com.swordfish.lemuroid.retrotv.share.ShareToTvActivity"

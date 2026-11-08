@@ -68,6 +68,9 @@ class PhonePadActivity : ComponentActivity() {
     @Volatile
     private var connecting = false
 
+    @Volatile
+    private var welcomed = false
+
     private var wasStopped = false
 
     private val prefs by lazy { getSharedPreferences("retrotv_share", Context.MODE_PRIVATE) }
@@ -91,7 +94,8 @@ class PhonePadActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         code = (intent.getStringExtra(EXTRA_CODE) ?: "").trim().lowercase()
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // Pionowo podczas łączenia; poziomo dopiero, gdy telewizor przyjmie pad.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -154,7 +158,13 @@ class PhonePadActivity : ComponentActivity() {
 
     private fun opened() = js("window.rtvNative&&rtvNative.open()")
 
-    private fun deliver(text: String) = js("window.rtvNative&&rtvNative.msg(${JSONObject.quote(text)})")
+    private fun deliver(text: String) {
+        if (text.contains("\"welcome\"")) {
+            welcomed = true
+            main.post { if (!destroyed) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE }
+        }
+        js("window.rtvNative&&rtvNative.msg(${JSONObject.quote(text)})")
+    }
 
     private fun closed(
         code: Int,
@@ -306,6 +316,11 @@ class PhonePadActivity : ComponentActivity() {
                         status("Połączono przez internet – czekam na telewizor…")
                         js("window.rtvLink='internet (możliwe opóźnienie)'")
                         opened()
+                        main.postDelayed({
+                            if (!welcomed && !destroyed) {
+                                status("Telewizor nie odpowiada. Sprawdź, czy Retro TV jest otwarte na telewizorze (ekran główny albo gra).")
+                            }
+                        }, 10_000)
                     } else {
                         status("Brak internetu. Sprawdź połączenie telefonu.")
                     }

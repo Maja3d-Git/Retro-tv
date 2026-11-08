@@ -108,7 +108,6 @@ class PhoneHomeActivity : ComponentActivity() {
         setContent { RetroTvContent { Screen() } }
     }
 
-    @Composable
     /** Wysyła plik aplikacji na telewizor (PUT /upload), który sam uruchamia instalator. */
     private fun uploadApk(
         hostPort: String,

@@ -27,6 +27,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -70,6 +72,11 @@ class PhoneHomeActivity : ComponentActivity() {
         registerForActivityResult(com.journeyapps.barcodescanner.ScanContract()) { result ->
             val raw = result.contents ?: return@registerForActivityResult
             val uri = android.net.Uri.parse(raw)
+            // Kod pokoju gry online (QR z ekranu pokoju na telewizorze).
+            uri.getQueryParameter("kod")?.takeIf { it.isNotBlank() }?.let { room ->
+                startActivity(Intent(this, NetplayGuestActivity::class.java).putExtra("code", room.uppercase()))
+                return@registerForActivityResult
+            }
             val k = uri.getQueryParameter("k")
             if (k.isNullOrBlank() || uri.host.isNullOrBlank()) {
                 onScanError?.invoke("To nie jest kod z Retro TV.")
@@ -151,63 +158,71 @@ class PhoneHomeActivity : ComponentActivity() {
                 .padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Retro TV", color = K.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            // Nagłówek jak na telewizorze.
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                androidx.compose.foundation.layout.Box(
+                    Modifier.height(36.dp).width(36.dp).clip(RoundedCornerShape(10.dp)).background(K.card),
+                    contentAlignment = androidx.compose.ui.Alignment.Center,
+                ) { Text("+", color = K.text, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                Spacer(Modifier.width(10.dp))
+                Text("RETRO TV", color = K.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 1.sp)
+            }
             release?.let { r ->
                 TvButton("Zainstaluj aktualizację ${r.versionName}", primary = true, modifier = Modifier.fillMaxWidth(), onClick = { installUpdate(r) })
             }
             updateStatus?.let { Text(it, color = K.muted, fontSize = 14.sp) }
-            Text("Telefon jako pad i pilot do Retro TV na telewizorze.", color = K.muted, fontSize = 16.sp)
-            val remembered = remember { prefs.getString("last_host", null)?.takeIf { code.isNotBlank() } }
-            if (remembered != null) {
-                TvButton("Połącz z telewizorem", primary = true, modifier = Modifier.fillMaxWidth(), onClick = {
-                    PhonePadActivity.start(this@PhoneHomeActivity, code.trim().lowercase())
+
+            Card("Pad do telewizora") {
+                val remembered = remember { prefs.getString("last_host", null)?.takeIf { code.isNotBlank() } }
+                if (remembered != null) {
+                    TvButton("Połącz z telewizorem", primary = true, modifier = Modifier.fillMaxWidth(), onClick = {
+                        PhonePadActivity.start(this@PhoneHomeActivity, code.trim().lowercase())
+                    })
+                    Text("Zapamiętany telewizor: ${remembered.substringBefore(':')}", color = K.muted, fontSize = 13.sp)
+                }
+                TvButton("Zeskanuj kod QR z telewizora", primary = remembered == null, modifier = Modifier.fillMaxWidth(), onClick = {
+                    scanQr { error = it }
                 })
-                Text("Zapamiętany telewizor: ${remembered.substringBefore(':')}", color = K.muted, fontSize = 13.sp)
+                Text("Na telewizorze: zębatka → Kontrolery. Kod pokoju gry online też tu zeskanujesz.", color = K.muted, fontSize = 13.sp)
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.filter { ch -> ch.isLetterOrDigit() }.take(12) },
+                    singleLine = true,
+                    label = { Text("Albo wpisz kod telewizora") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
+                    shape = RoundedCornerShape(12.dp),
+                    colors =
+                        OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = K.text,
+                            unfocusedTextColor = K.text,
+                            focusedBorderColor = K.coral,
+                            unfocusedBorderColor = K.line,
+                            focusedLabelColor = K.coral,
+                            unfocusedLabelColor = K.muted,
+                            cursorColor = K.coral,
+                        ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let { Text(it, color = K.coral, fontSize = 14.sp) }
+                TvButton("Połącz kodem", modifier = Modifier.fillMaxWidth(), onClick = {
+                    validCode()?.let { PhonePadActivity.start(this@PhoneHomeActivity, it) }
+                })
             }
-            TvButton("Zeskanuj kod QR z telewizora", primary = remembered == null, modifier = Modifier.fillMaxWidth(), onClick = {
-                scanQr { error = it }
-            })
-            Text("Na telewizorze: Kontrolery. Po zeskanowaniu pad otworzy się sam.", color = K.muted, fontSize = 13.sp)
-            Spacer(Modifier.height(4.dp))
-            Text("Albo wpisz kod telewizora", color = K.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            OutlinedTextField(
-                value = code,
-                onValueChange = { code = it.filter { ch -> ch.isLetterOrDigit() }.take(12) },
-                singleLine = true,
-                placeholder = { Text("np. abcdef") },
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
-                shape = RoundedCornerShape(12.dp),
-                colors =
-                    OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = K.text,
-                        unfocusedTextColor = K.text,
-                        focusedBorderColor = K.accent,
-                        unfocusedBorderColor = K.line,
-                        cursorColor = K.accent,
-                    ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                "Kod znajdziesz na telewizorze: Kontrolery → pod kodem QR.",
-                color = K.muted,
-                fontSize = 14.sp,
-            )
-            error?.let { Text(it, color = K.coral, fontSize = 14.sp) }
-            TvButton("Pad – graj telefonem", modifier = Modifier.fillMaxWidth(), onClick = {
-                validCode()?.let { PhonePadActivity.start(this@PhoneHomeActivity, it) }
-            })
-            Text(
-                "Telefon łączy się z telewizorem przez sieć domową, a gdy to niemożliwe – przez internet.",
-                color = K.muted,
-                fontSize = 13.sp,
-            )
-            TvButton("Wyślij gry na telewizor", modifier = Modifier.fillMaxWidth(), onClick = {
-                if (validCode() != null) filePicker.launch(arrayOf("*/*"))
-            })
-            TvButton("Dołącz do gry online", modifier = Modifier.fillMaxWidth(), onClick = {
-                startActivity(Intent(this@PhoneHomeActivity, NetplayGuestActivity::class.java))
-            })
-            Spacer(Modifier.height(8.dp))
+
+            Card("Gry") {
+                TvButton("Wyślij gry na telewizor", modifier = Modifier.fillMaxWidth(), onClick = {
+                    if (validCode() != null) filePicker.launch(arrayOf("*/*"))
+                })
+                Text("Pliki trafią do pamięci telewizora (działa w tej samej sieci Wi-Fi).", color = K.muted, fontSize = 13.sp)
+            }
+
+            Card("Gra przez internet") {
+                TvButton("Dołącz do gry", modifier = Modifier.fillMaxWidth(), onClick = {
+                    startActivity(Intent(this@PhoneHomeActivity, NetplayGuestActivity::class.java))
+                })
+                Text("Kod pokoju widzi gospodarz na swoim telewizorze. Przyciski pojawią się na ekranie.", color = K.muted, fontSize = 13.sp)
+            }
+
             TvButton("Emulator na tym telefonie", modifier = Modifier.fillMaxWidth(), onClick = {
                 startActivity(Intent(this@PhoneHomeActivity, MainActivity::class.java).putExtra(EXTRA_PHONE_EMULATOR, true))
             })
@@ -217,5 +232,19 @@ class PhoneHomeActivity : ComponentActivity() {
                 fontSize = 13.sp,
             )
         }
+    }
+}
+
+@Composable
+private fun Card(
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(K.card).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(title.uppercase(), color = K.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        content()
     }
 }

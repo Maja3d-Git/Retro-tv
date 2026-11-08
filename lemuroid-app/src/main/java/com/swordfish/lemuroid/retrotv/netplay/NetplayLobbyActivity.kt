@@ -113,6 +113,14 @@ class NetplayLobbyActivity : ComponentActivity() {
                     fontSize = 15.sp,
                 )
                 Spacer(Modifier.height(6.dp))
+                if (state.code.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Box(Modifier.clip(RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Color.White).padding(8.dp)) {
+                            com.swordfish.lemuroid.retrotv.system.QrImage("${Netplay.WEB_URL}?kod=${state.code}", Modifier.size(120.dp))
+                        }
+                        Text("Zeskanuj aplikacją Retro TV na telefonie albo aparatem (otworzy się strona gry).", color = K.muted, fontSize = 14.sp, modifier = Modifier.width(260.dp))
+                    }
+                }
                 Text("Jak dołączyć:", color = K.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text("• Retro TV na innym telewizorze → „Dołącz do gry” → wpisz kod", color = K.muted, fontSize = 15.sp)
                 Text("• Retro TV na telefonie → „Dołącz do gry online”", color = K.muted, fontSize = 15.sp)

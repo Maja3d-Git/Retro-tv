@@ -222,7 +222,12 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                     Page.NETPLAY -> {
                         Text("Gra przez internet", color = K.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
                         Text("KOD POKOJU", color = K.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                        Text(netplay.code, color = K.text, fontSize = 40.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 4.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Text(netplay.code, color = K.text, fontSize = 40.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 4.sp)
+                            Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color.White).padding(6.dp)) {
+                                com.swordfish.lemuroid.retrotv.system.QrImage("${com.swordfish.lemuroid.retrotv.netplay.Netplay.WEB_URL}?kod=${netplay.code}", Modifier.width(96.dp).aspectRatio(1f))
+                            }
+                        }
                         Text(
                             if (netplay.online) "Pokój jest otwarty." else "Łączenie z serwerem…",
                             color = if (netplay.online) K.ok else K.muted,

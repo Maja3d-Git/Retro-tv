@@ -26,6 +26,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +82,8 @@ class NetplayGuestActivity : ComponentActivity() {
     private var inLobby = false
     private var codeInput by mutableStateOf("")
 
+    private val isPhone by lazy { !com.swordfish.lemuroid.app.tv.shared.TVHelper.isTV(this) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RetroTvTheme.apply(this)
@@ -97,10 +107,12 @@ class NetplayGuestActivity : ComponentActivity() {
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+            // Telefon: przyciski na ekranie, bo zwykle nie ma pada.
+            if (streaming && isPhone) TouchControls()
             if (!streaming) {
                 Box(Modifier.fillMaxSize().background(K.bg), contentAlignment = Alignment.Center) {
                     Column(
-                        Modifier.width(560.dp).clip(RoundedCornerShape(20.dp)).background(K.card).padding(32.dp),
+                        Modifier.padding(16.dp).fillMaxWidth().widthIn(max = 560.dp).clip(RoundedCornerShape(20.dp)).background(K.card).padding(28.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         Text("Dołącz do gry", color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
@@ -128,7 +140,7 @@ class NetplayGuestActivity : ComponentActivity() {
                         }
                         status?.let { Text(it, color = K.muted, fontSize = 15.sp) }
                         Text(
-                            "W grze sterujesz padem albo pilotem (OK = przycisk A). Wstecz kończy grę.",
+                            if (isPhone) "Po połączeniu obróć telefon poziomo – przyciski pojawią się na ekranie." else "W grze sterujesz padem albo pilotem (OK = przycisk A). Wstecz kończy grę.",
                             color = K.muted,
                             fontSize = 13.sp,
                         )
@@ -153,6 +165,7 @@ class NetplayGuestActivity : ComponentActivity() {
     }
 
     private fun join(roomCode: String) {
+        if (isPhone) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         code = roomCode.uppercase()
         status = "Łączenie z pokojem $code…"
         val eglBase = EglBase.create().also { egl = it }
@@ -257,6 +270,88 @@ class NetplayGuestActivity : ComponentActivity() {
     }
 
     // ---------- sterowanie ----------
+
+    private fun key(
+        code: Int,
+        down: Boolean,
+    ) = send(JSONObject().put("t", "k").put("c", code).put("d", if (down) 1 else 0))
+
+    private fun dpad(
+        code: Int,
+        down: Boolean,
+    ) {
+        if (down) dpadDirs.add(code) else dpadDirs.remove(code)
+        sendDpad()
+    }
+
+    @Composable
+    private fun TouchControls() {
+        Box(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp)) {
+            Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TouchButton("L", 96, 44, { key(KeyEvent.KEYCODE_BUTTON_L1, it) })
+            }
+            Row(Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TouchButton("R", 96, 44, { key(KeyEvent.KEYCODE_BUTTON_R1, it) })
+            }
+            Column(Modifier.align(Alignment.CenterStart), horizontalAlignment = Alignment.CenterHorizontally) {
+                TouchButton("▲", 60, 60, { dpad(KeyEvent.KEYCODE_DPAD_UP, it) })
+                Row(horizontalArrangement = Arrangement.spacedBy(60.dp)) {
+                    TouchButton("◀", 60, 60, { dpad(KeyEvent.KEYCODE_DPAD_LEFT, it) })
+                    TouchButton("▶", 60, 60, { dpad(KeyEvent.KEYCODE_DPAD_RIGHT, it) })
+                }
+                TouchButton("▼", 60, 60, { dpad(KeyEvent.KEYCODE_DPAD_DOWN, it) })
+            }
+            Column(Modifier.align(Alignment.CenterEnd), horizontalAlignment = Alignment.CenterHorizontally) {
+                TouchButton("X", 58, 58, { key(KeyEvent.KEYCODE_BUTTON_X, it) }, round = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(58.dp)) {
+                    TouchButton("Y", 58, 58, { key(KeyEvent.KEYCODE_BUTTON_Y, it) }, round = true)
+                    TouchButton("A", 58, 58, { key(KeyEvent.KEYCODE_BUTTON_A, it) }, round = true)
+                }
+                TouchButton("B", 58, 58, { key(KeyEvent.KEYCODE_BUTTON_B, it) }, round = true)
+            }
+            Row(Modifier.align(Alignment.BottomCenter), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                TouchButton("SELECT", 92, 36, { key(KeyEvent.KEYCODE_BUTTON_SELECT, it) })
+                TouchButton("START", 92, 36, { key(KeyEvent.KEYCODE_BUTTON_START, it) })
+            }
+        }
+    }
+
+    @Composable
+    private fun TouchButton(
+        label: String,
+        w: Int,
+        h: Int,
+        onPress: (Boolean) -> Unit,
+        round: Boolean = false,
+    ) {
+        var pressed by remember { mutableStateOf(false) }
+        val vibrator = remember { getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator }
+        Box(
+            Modifier
+                .width(w.dp)
+                .height(h.dp)
+                .clip(if (round) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(14.dp))
+                .background(if (pressed) K.coral.copy(alpha = 0.85f) else Color(0x66FFFFFF))
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        pressed = true
+                        onPress(true)
+                        runCatching {
+                            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                                vibrator?.vibrate(android.os.VibrationEffect.createOneShot(12, 120))
+                            }
+                        }
+                        waitForUpOrCancellation()
+                        pressed = false
+                        onPress(false)
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(label, color = Color.White, fontSize = if (label.length > 2) 12.sp else 20.sp, fontWeight = FontWeight.Bold)
+        }
+    }
 
     private val dpadDirs = mutableSetOf<Int>()
 

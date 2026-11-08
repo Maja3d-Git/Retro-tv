@@ -63,9 +63,18 @@ object Updater {
             Timber.w(e, "API GitHuba niedostępne, sprawdzam przez stronę wydań")
             try {
                 fetchLatestWeb()
+            } catch (e2: kotlinx.coroutines.CancellationException) {
+                throw e2
             } catch (e2: Exception) {
-                Timber.e(e2, "Sprawdzanie przez stronę wydań nie powiodło się")
-                throw e
+                Timber.w(e2, "Strona wydań niedostępna, sprawdzam kopię na GitHub Pages")
+                try {
+                    fetchLatestPages()
+                } catch (e3: kotlinx.coroutines.CancellationException) {
+                    throw e3
+                } catch (e3: Exception) {
+                    Timber.e(e3, "Kopia na GitHub Pages też niedostępna")
+                    throw e
+                }
             }
         }
 
@@ -94,6 +103,30 @@ object Updater {
                 apkUrl = "https://github.com/$repo/releases/download/$tag/$APK_NAME",
                 apkSize = 0L,
             )
+        }
+
+    /** Adres kopii na GitHub Pages, np. https://maja3d-git.github.io/Retro-tv/update/ */
+    private val pagesBase: String
+        get() {
+            val (owner, repo) = BuildConfig.RETROTV_REPO.split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+            return "https://${owner.lowercase()}.github.io/$repo/update/"
+        }
+
+    private suspend fun fetchLatestPages(): ReleaseInfo =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(pagesBase + "latest.json").header("User-Agent", "RetroTV-Android").build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("Kopia aktualizacji odpowiedziała kodem ${response.code}")
+                val json = JSONObject(response.body?.string() ?: throw IOException("Pusta odpowiedź"))
+                ReleaseInfo(
+                    build = json.getInt("build"),
+                    title = json.optString("title", "Retro TV"),
+                    notes = json.optString("notes", ""),
+                    publishedAt = "",
+                    apkUrl = pagesBase + json.optString("apk", APK_NAME),
+                    apkSize = 0L,
+                )
+            }
         }
 
     private suspend fun fetchLatestApi(): ReleaseInfo =

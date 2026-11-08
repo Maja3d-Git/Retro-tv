@@ -35,6 +35,42 @@ object PhonePadLifecycle : Application.ActivityLifecycleCallbacks {
     fun install(application: Application) {
         if (!TVHelper.isTV(application)) return
         application.registerActivityLifecycleCallbacks(this)
+        watchPads(application)
+    }
+
+    private val knownPads = mutableMapOf<Int, String>()
+
+    /** Powiadomienie „Podłączono pad … – gracz N” i „Odłączono pad …”, gdy aplikacja jest na ekranie. */
+    private fun watchPads(application: Application) {
+        val im = application.getSystemService(android.content.Context.INPUT_SERVICE) as? android.hardware.input.InputManager ?: return
+        PadDetector.pads().forEach { knownPads[it.id] = it.name }
+        im.registerInputDeviceListener(
+            object : android.hardware.input.InputManager.InputDeviceListener {
+                override fun onInputDeviceAdded(deviceId: Int) {
+                    val d = InputDevice.getDevice(deviceId) ?: return
+                    if (!PadDetector.isRealGamepad(d) || knownPads.containsKey(deviceId)) return
+                    knownPads[deviceId] = d.name
+                    val player = PadDetector.orderedPads(application).indexOfFirst { it.id == deviceId } + 1
+                    toast(application, "Podłączono pad: ${d.name}" + if (player > 0) " – gracz $player" else "")
+                }
+
+                override fun onInputDeviceRemoved(deviceId: Int) {
+                    val name = knownPads.remove(deviceId) ?: return
+                    toast(application, "Odłączono pad: $name")
+                }
+
+                override fun onInputDeviceChanged(deviceId: Int) {}
+            },
+            handler,
+        )
+    }
+
+    private fun toast(
+        application: Application,
+        text: String,
+    ) {
+        if (resumed?.get() == null) return
+        runCatching { android.widget.Toast.makeText(application, text, android.widget.Toast.LENGTH_SHORT).show() }
     }
 
     override fun onActivityResumed(activity: Activity) {

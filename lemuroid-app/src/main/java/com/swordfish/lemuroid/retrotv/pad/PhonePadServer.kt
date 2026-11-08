@@ -51,7 +51,7 @@ interface PadSink {
     fun onText(text: String) {}
 }
 
-data class PhoneInfo(val id: String, val name: String, val player: Int)
+data class PhoneInfo(val id: String, val name: String, val player: Int, val link: String = "")
 
 /**
  * Serwer pada w telefonie: strona HTTP z padem (port [HTTP_PORT]) i WebSocket z przyciskami ([WS_PORT]).
@@ -490,7 +490,7 @@ object PhonePadServer {
         val json =
             JSONObject()
                 .put("t", "welcome")
-                .put("player", info.player)
+                .put("player", displayPlayer(info.player))
                 .put("mode", s.mode)
                 .put("layout", s.layout)
                 .put("title", s.title)
@@ -498,8 +498,18 @@ object PhonePadServer {
     }
 
     internal fun dropConn(conn: PadConn) {
-        clients.remove(conn)?.let { Timber.i("Telefon %s rozłączony", it.name) }
+        clients.remove(conn)?.let {
+            Timber.i("Telefon %s rozłączony", it.name)
+            notify("${it.name} rozłączony")
+        }
         publish()
+    }
+
+    /** Numer gracza widoczny dla ludzi: telefony są po padach (pad = gracz 1, telefon = gracz 2…). */
+    fun displayPlayer(slot: Int): Int = com.swordfish.lemuroid.retrotv.pad.PadDetector.pads().size + slot
+
+    private fun notify(text: String) {
+        main.post { runCatching { android.widget.Toast.makeText(appContext, text, android.widget.Toast.LENGTH_SHORT).show() } }
     }
 
     internal fun noteVisitor(label: String) {
@@ -523,11 +533,14 @@ object PhonePadServer {
                     conn.close(4002, "Podłączono już $MAX_PHONES telefony")
                     return
                 }
-                val info = PhoneInfo(id, name, player)
+                val link = if (conn is WsConn) "sieć domowa" else "internet"
+                val wasConnected = clients.containsKey(conn)
+                val info = PhoneInfo(id, name, player, link)
                 clients[conn] = info
-                Timber.i("Telefon %s połączony jako gracz %d", name, player)
+                Timber.i("Telefon %s połączony jako gracz %d (%s)", name, player, link)
                 publish()
                 sendWelcome(conn, info)
+                if (!wasConnected) notify("$name dołączył – gracz ${displayPlayer(player)}")
             }
             "k" -> {
                 val info = clients[conn] ?: return

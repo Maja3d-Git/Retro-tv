@@ -185,6 +185,9 @@ class PhonePadActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
+        fun deviceName(): String = (Build.MODEL ?: "Telefon").take(30)
+
+        @JavascriptInterface
         fun pickFiles() = main.post { runCatching { filePicker.launch(arrayOf("*/*")) } }
     }
 
@@ -244,6 +247,7 @@ class PhonePadActivity : ComponentActivity() {
                     prefs.edit().putString("last_host", "$host:$httpPort").apply()
                     Timber.i("Pad: połączono w sieci domowej z %s", host)
                     status("Połączono przez sieć domową")
+                    js("window.rtvLink='sieć domowa'")
                     opened()
                 }
 
@@ -300,6 +304,7 @@ class PhonePadActivity : ComponentActivity() {
                         relayReady = true
                         connecting = false
                         status("Połączono przez internet – czekam na telewizor…")
+                        js("window.rtvLink='internet (możliwe opóźnienie)'")
                         opened()
                     } else {
                         status("Brak internetu. Sprawdź połączenie telefonu.")

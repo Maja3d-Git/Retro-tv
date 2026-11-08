@@ -57,8 +57,9 @@ class InputDeviceManager(
 
     fun getGamePadsPortMapperObservable(): Flow<(InputDevice?) -> Int?> {
         return getEnabledInputsObservable().map { gamePads ->
+            // Retro TV: kolejność graczy ustawiona w Kontrolerach.
             val portMappings =
-                gamePads
+                com.swordfish.lemuroid.retrotv.pad.PadOrder.sort(context, gamePads)
                     .mapIndexed { index, inputDevice -> inputDevice.id to index }
                     .toMap()
             return@map { inputDevice -> portMappings[inputDevice?.id] }

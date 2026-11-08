@@ -26,6 +26,9 @@ object PadDetector {
         return faceButtons >= 3 || stick
     }
 
+    /** Pady w kolejności graczy (ustawianej w Kontrolerach). */
+    fun orderedPads(context: android.content.Context): List<InputDevice> = PadOrder.sort(context, pads())
+
     fun pads(): List<InputDevice> =
         InputDevice.getDeviceIds().toList()
             .mapNotNull { InputDevice.getDevice(it) }

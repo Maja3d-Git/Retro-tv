@@ -170,7 +170,9 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
                 startActivity(Intent(this@MainTVActivity, TVSettingsActivity::class.java))
             }
 
-            override fun openControllers() = TVSystemActivity.launchSection(this@MainTVActivity, "CONTROLLERS")
+            override fun openControllers() {
+                startActivity(Intent(this@MainTVActivity, com.swordfish.lemuroid.retrotv.controllers.ControllersActivity::class.java))
+            }
 
             override fun openSystem() {
                 startActivity(Intent(this@MainTVActivity, TVSystemActivity::class.java))

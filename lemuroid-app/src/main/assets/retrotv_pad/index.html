@@ -61,7 +61,7 @@ main{flex:1;display:flex;align-items:center;justify-content:space-between;gap:16
   <main id="main"></main>
 </div>
 <div id="kbd" hidden><input id="kbIn" placeholder="Wpisz tekst i wyślij na telewizor" autocomplete="off"><button class="small" id="kbSend" style="height:44px">Wyślij</button></div>
-<div id="overlay"><h1>Łączenie z telewizorem…</h1><p>Telefon i telewizor muszą być w tej samej sieci Wi-Fi. Jeśli to trwa długo, otwórz w Retro TV ekran Kontrolery i zeskanuj kod QR jeszcze raz.</p></div>
+<div id="overlay"><h1>Łączenie z telewizorem…</h1><p>Telefon i telewizor muszą być w tej samej sieci Wi-Fi. Jeśli to trwa długo, otwórz w Retro TV ekran Kontrolery i zeskanuj kod QR jeszcze raz.</p><p id="getApp"><a href="https://github.com/Maja3d-Git/Retro-tv/releases/latest/download/retro-tv.apk" style="color:#FF8A65">Pobierz aplikację Retro TV na Androida</a> – łączy się pewniej niż przeglądarka, także przez internet.</p></div>
 <div class="rot">Obróć telefon poziomo, żeby grać.</div>
 <script>
 (function(){
@@ -81,7 +81,7 @@ const params=new URLSearchParams(location.search);
 const key=params.get("k")||"";
 let id=null;try{id=localStorage.getItem("rtv-id")}catch(e){}
 if(!id){id=Math.random().toString(36).slice(2,12);try{localStorage.setItem("rtv-id",id)}catch(e){}}
-const name=window.RetroTVNative?"Retro TV na telefonie":(/iPhone|iPad/.test(navigator.userAgent)?"iPhone":/Android/.test(navigator.userAgent)?"Telefon z Androidem":"Telefon");
+const name=window.RetroTVNative?(window.RetroTVNative.deviceName()||"Telefon"):(/iPhone|iPad/.test(navigator.userAgent)?"iPhone":/Android/.test(navigator.userAgent)?"Telefon z Androidem":"Telefon");
 const $=s=>document.querySelector(s);
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 const NATIVE=window.RetroTVNative||null;
@@ -102,7 +102,7 @@ function connect(){
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}
     if(m.t==="welcome"){connected=true;player=m.player;mode=m.mode;layout=m.mode==="menu"?"menu":(m.layout||"two");
       $("#overlay").hidden=true;$("#dot").classList.add("on");
-      $("#status").textContent="Gracz "+player;$("#title").textContent=m.mode==="menu"?"· sterowanie menu":"· "+(m.title||"");
+      $("#status").textContent="Gracz "+player+(window.rtvLink?" · "+window.rtvLink:"");$("#title").textContent=m.mode==="menu"?"· sterowanie menu":"· "+(m.title||"");
       $("#menuBtn").hidden=m.mode!=="game";$("#kbBtn").hidden=m.mode!=="menu";$("#upBtn").hidden=m.mode!=="menu";build();}};
   ws.onclose=e=>{connected=false;$("#dot").classList.remove("on");
     if(e.code===4001||e.code===4002){$("#overlay").hidden=false;$("#overlay h1").textContent=e.reason||"Odrzucono połączenie";return;}
@@ -170,6 +170,7 @@ $("#kbSend").addEventListener("click",()=>{send({t:"text",v:$("#kbIn").value});$
 $("#kbIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("#kbSend").click()});
 document.addEventListener("contextmenu",e=>e.preventDefault());
 setInterval(()=>send({t:"ping"}),5000);
+if(NATIVE){const g=document.getElementById("getApp");if(g)g.remove();}
 build();connect();
 })();
 </script>

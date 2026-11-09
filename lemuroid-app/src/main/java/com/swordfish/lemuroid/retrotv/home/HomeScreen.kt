@@ -205,6 +205,9 @@ private fun TopNav(
         }
     }
     val phones by PhonePadServer.phones.collectAsState()
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+    // Węższe ekrany telewizora (np. 960 dp): samo logo bez napisu, żeby ikony po prawej nie malały.
+    val compact = maxWidth < 1100.dp
     Row(
         Modifier
             .fillMaxWidth()
@@ -212,38 +215,44 @@ private fun TopNav(
             // Strzałka w górę z treści zawsze trafia na „Start”.
             .focusProperties { enter = { startFocus } }
             .tvRowPane()
-            .padding(horizontal = 40.dp),
+            .padding(horizontal = if (compact) 28.dp else 40.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Logo()
-        Spacer(Modifier.width(12.dp))
-        NavPill("Start", selected = true, modifier = Modifier.focusRequester(startFocus), onClick = onStart)
-        NavPill("Gry i ROM-y", selected = false, onClick = actions::openRomManager)
-        NavPill("Dołącz do gry", selected = false, onClick = actions::joinOnline)
-        Spacer(Modifier.weight(1f))
-        IconPill(androidx.compose.material.icons.Icons.Outlined.Search, "Szukaj gry", onSearch)
-        Chip(if (pads == 0) "Brak pada" else if (pads == 1) "1 pad" else "$pads pady", if (pads > 0) K.ok else K.muted)
-        if (phones.isNotEmpty()) Chip(if (phones.size == 1) "1 telefon" else "${phones.size} telefony", K.ok)
-        Text(
-            SimpleDateFormat("HH:mm", Locale.getDefault()).format(now),
-            color = K.muted,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            softWrap = false,
-            modifier = Modifier.padding(horizontal = 6.dp),
-        )
-        IconPill(androidx.compose.material.icons.Icons.Outlined.Settings, "Ustawienia", onSettings)
+        // Lewa część dostaje to, co zostanie; prawa (ikony, stan, zegar) zawsze w pełnym rozmiarze.
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Logo(showText = !compact)
+            Spacer(Modifier.width(8.dp))
+            NavPill("Start", selected = true, modifier = Modifier.focusRequester(startFocus), onClick = onStart)
+            NavPill("Gry i ROM-y", selected = false, onClick = actions::openRomManager)
+            NavPill("Dołącz do gry", selected = false, onClick = actions::joinOnline)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconPill(androidx.compose.material.icons.Icons.Outlined.Search, "Szukaj gry", onSearch)
+            Chip(if (pads == 0) "Brak pada" else if (pads == 1) "1 pad" else "$pads pady", if (pads > 0) K.ok else K.muted)
+            if (phones.isNotEmpty()) Chip(if (phones.size == 1) "1 telefon" else "${phones.size} telefony", K.ok)
+            if (!compact || phones.isEmpty()) {
+                Text(
+                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(now),
+                    color = K.muted,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
+            IconPill(androidx.compose.material.icons.Icons.Outlined.Settings, "Ustawienia", onSettings)
+        }
+    }
     }
 }
 
 @Composable
-private fun Logo() {
+private fun Logo(showText: Boolean = true) {
     // To samo logo co w menu bocznym i w aplikacji na telefonie.
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         PadLogo(Modifier.size(34.dp))
-        Text("RETRO TV", color = K.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 1.sp)
+        if (showText) Text("RETRO TV", color = K.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display, letterSpacing = 1.sp)
     }
 }
 

@@ -217,7 +217,7 @@ private fun TopNav(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Logo()
-        Spacer(Modifier.width(20.dp))
+        Spacer(Modifier.width(12.dp))
         NavPill("Start", selected = true, modifier = Modifier.focusRequester(startFocus), onClick = onStart)
         NavPill("Gry i ROM-y", selected = false, onClick = actions::openRomManager)
         NavPill("Dołącz do gry", selected = false, onClick = actions::joinOnline)

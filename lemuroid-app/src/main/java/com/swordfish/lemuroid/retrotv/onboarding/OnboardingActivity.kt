@@ -29,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -83,10 +85,17 @@ class OnboardingActivity : ComponentActivity() {
         var step by remember { mutableIntStateOf(start) }
         val total = 4
         BackHandler(enabled = step > 0) { step-- }
-        Box(Modifier.fillMaxSize().background(K.bg).padding(48.dp), contentAlignment = Alignment.Center) {
+        // Okno dopasowane do niższych ekranów telewizora: mniejsze marginesy i przewijanie, przycisk zawsze dostępny.
+        Box(Modifier.fillMaxSize().background(K.bg).padding(horizontal = 48.dp, vertical = 20.dp), contentAlignment = Alignment.Center) {
             Column(
-                Modifier.width(720.dp).clip(RoundedCornerShape(20.dp)).background(K.card).padding(36.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                Modifier
+                    .widthIn(max = 760.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(K.card)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .padding(horizontal = 32.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PadLogo(Modifier.size(40.dp))
@@ -113,8 +122,7 @@ class OnboardingActivity : ComponentActivity() {
         text: String,
     ) {
         Text(title, color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
-        Text(text, color = K.muted, fontSize = 16.sp, lineHeight = 23.sp)
-        Spacer(Modifier.height(4.dp))
+        Text(text, color = K.muted, fontSize = 15.sp, lineHeight = 21.sp)
     }
 
     @Composable

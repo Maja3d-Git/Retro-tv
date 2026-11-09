@@ -10,6 +10,8 @@ object PadDetector {
 
     fun isRealGamepad(device: InputDevice): Boolean {
         if (device.isVirtual) return false
+        // Klawiatury (także małe z touchpadem) nie są padami – inaczej zajmowały miejsce gracza 1.
+        if (device.keyboardType == InputDevice.KEYBOARD_TYPE_ALPHABETIC) return false
         val name = device.name.lowercase()
         if (notPadNames.any { name.contains(it) } || Regex("""(^|[_\s])rc\d""").containsMatchIn(name)) return false
         val gamepad = device.sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD

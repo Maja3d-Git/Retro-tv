@@ -22,6 +22,8 @@ object UpdatePrompt {
             val release =
                 try {
                     Updater.fetchLatest()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Timber.w(e, "Automatyczne sprawdzenie aktualizacji nie powiodło się")
                     return@launch

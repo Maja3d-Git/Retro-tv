@@ -98,6 +98,11 @@ class MainTVActivity : BaseTVActivity(), BusyActivity {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Retro TV: ZIP-y z grami w pamięci telewizora rozpakowujemy, żeby biblioteka je widziała.
+        kotlin.concurrent.thread(name = "retrotv-unzip", isDaemon = true) {
+            val n = runCatching { com.swordfish.lemuroid.retrotv.roms.RomFiles.expandExistingZips(applicationContext) }.getOrDefault(0)
+            if (n > 0) com.swordfish.lemuroid.app.shared.library.LibraryIndexScheduler.scheduleLibrarySync(applicationContext)
+        }
         RetroTvTheme.apply(this)
         appliedPalette = RetroTvTheme.palette
 

@@ -128,7 +128,13 @@ class RomManagerActivity : ComponentActivity() {
         }
     }
 
-    fun rescan() = LibraryIndexScheduler.scheduleLibrarySync(applicationContext)
+    fun rescan() {
+        // Najpierw rozpakowujemy ZIP-y z grami (wysłane z telefonu, skopiowane z pendrive’a), potem skanujemy.
+        kotlin.concurrent.thread(name = "retrotv-unzip", isDaemon = true) {
+            runCatching { RomFiles.expandExistingZips(applicationContext) }
+            LibraryIndexScheduler.scheduleLibrarySync(applicationContext)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

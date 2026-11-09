@@ -60,6 +60,8 @@ class InputDeviceManager(
             // Retro TV: kolejność graczy ustawiona w Kontrolerach.
             val portMappings =
                 com.swordfish.lemuroid.retrotv.pad.PadOrder.sort(context, gamePads)
+                    // Klawiatury na koniec: pad (albo telefon) zawsze jest graczem 1.
+                    .sortedBy { if (it.keyboardType == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC) 1 else 0 }
                     .mapIndexed { index, inputDevice -> inputDevice.id to index }
                     .toMap()
             return@map { inputDevice -> portMappings[inputDevice?.id] }

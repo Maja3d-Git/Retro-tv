@@ -146,29 +146,61 @@ object RomFiles {
      * ZIP z kilkoma grami rozpakowujemy na osobne pliki (biblioteka rozpoznaje grę w ZIP-ie
      * tylko wtedy, gdy jest w nim jedna gra). ZIP z jedną grą zostaje bez zmian.
      */
+    /** Rozszerzenia gier konsolowych (bez automatów i bez niejednoznacznych .bin/.rom/.img). */
+    private val consoleExtensions: Set<String> by lazy {
+        GameSystem.all()
+            .filter { it.id != com.swordfish.lemuroid.lib.library.SystemID.FBNEO && it.id != com.swordfish.lemuroid.lib.library.SystemID.MAME2003PLUS }
+            .flatMap { it.supportedExtensions }
+            .map { it.lowercase(Locale.US) }
+            .filter { it !in setOf("zip", "bin", "rom", "img", "7z") }
+            .toSet()
+    }
+
+    /**
+     * Rozpakowuje ZIP z grą konsolową (jedną lub kilkoma), żeby biblioteka ją rozpoznała – także gdy w archiwum
+     * są dodatkowe pliki (readme, okładki). ZIP-y automatów (zestawy plików bez rozszerzeń gier) zostają spakowane.
+     * Zwraca liczbę wypakowanych gier (0 = plik bez zmian).
+     */
     fun expandZipIfNeeded(file: File): Int {
         if (!file.name.lowercase(Locale.US).endsWith(".zip")) return 0
         val entries =
             runCatching {
                 java.util.zip.ZipFile(file).use { zip ->
-                    zip.entries().toList().filter { !it.isDirectory && isRom(it.name) && !it.name.lowercase(Locale.US).endsWith(".zip") }.map { it.name }
+                    val all = zip.entries().toList().filter { !it.isDirectory }.map { it.name }
+                    val games = all.filter { it.substringAfterLast('.', "").lowercase(Locale.US) in consoleExtensions }
+                    // Płyty (cue/bin, m3u): wypakowujemy też pliki .bin, do których odwołuje się .cue.
+                    if (games.any { it.lowercase(Locale.US).endsWith(".cue") }) {
+                        games + all.filter { it.lowercase(Locale.US).endsWith(".bin") }
+                    } else {
+                        games
+                    }
                 }
-            }.getOrElse { return 0 }
-        if (entries.size <= 1) return 0
-        val dir = File(file.parentFile, file.nameWithoutExtension.replace(Regex("""[\\/:*?"<>|]"""), "_")).apply { mkdirs() }
+            }.getOrElse { return 0 }.distinct()
+        if (entries.isEmpty()) return 0
+        val dir =
+            if (entries.size == 1) {
+                file.parentFile ?: return 0
+            } else {
+                File(file.parentFile, file.nameWithoutExtension.replace(Regex("""[\\/:*?"<>|]"""), "_")).apply { mkdirs() }
+            }
         var count = 0
         java.util.zip.ZipFile(file).use { zip ->
             entries.forEach { name ->
                 val entry = zip.getEntry(name) ?: return@forEach
                 val out = File(dir, name.substringAfterLast('/').replace(Regex("""[\\/:*?"<>|]"""), "_"))
                 zip.getInputStream(entry).use { input -> out.outputStream().use { input.copyTo(it) } }
-                count++
+                if (!name.lowercase(Locale.US).endsWith(".bin") || entries.none { it.lowercase(Locale.US).endsWith(".cue") }) count++
             }
         }
         file.delete()
         Timber.i("Rozpakowano %d gier z %s", count, file.name)
-        return count
+        return count.coerceAtLeast(1)
     }
+
+    /** Rozpakowuje ZIP-y z grami, które już leżą w pamięci telewizora (np. wysłane przed poprawką). */
+    fun expandExistingZips(context: Context): Int =
+        internalDir(context).walkTopDown().filter { it.isFile && it.name.lowercase(Locale.US).endsWith(".zip") }
+            .sumOf { runCatching { expandZipIfNeeded(it) }.getOrDefault(0) }
 }
 
 /** Dostęp do udziałów sieciowych (NAS, komputer z Windows) przez SMB. */

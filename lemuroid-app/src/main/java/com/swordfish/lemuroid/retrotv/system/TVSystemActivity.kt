@@ -232,6 +232,9 @@ private fun UpdatesSection(
             state =
                 try {
                     UpdateState.Ready(Updater.fetchLatest())
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Przejście do innej zakładki przerywa sprawdzanie – to nie błąd.
+                    throw e
                 } catch (e: Exception) {
                     Timber.w(e, "Sprawdzanie aktualizacji nie powiodło się")
                     UpdateState.Failed(e.message ?: "Nieznany błąd")

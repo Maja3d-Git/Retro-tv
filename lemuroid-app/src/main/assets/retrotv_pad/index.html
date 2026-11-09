@@ -55,6 +55,7 @@ main{flex:1;display:flex;align-items:center;justify-content:space-between;gap:16
     <span id="title"></span>
     <button class="small" id="upBtn" hidden>Wyślij gry</button>
     <button class="small" id="kbBtn" hidden>Klawiatura</button>
+    <button class="small" id="exitBtn" hidden>Zakończ</button>
     <button class="small" id="menuBtn" hidden>Menu gry</button>
   </header>
   <div class="shoulders" id="shoulders"></div>
@@ -170,7 +171,7 @@ $("#kbSend").addEventListener("click",()=>{send({t:"text",v:$("#kbIn").value});$
 $("#kbIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("#kbSend").click()});
 document.addEventListener("contextmenu",e=>e.preventDefault());
 setInterval(()=>send({t:"ping"}),5000);
-if(NATIVE){const g=document.getElementById("getApp");if(g)g.remove();const r=document.querySelector(".rot");if(r)r.remove();}
+if(NATIVE){const x=$("#exitBtn");x.hidden=false;x.addEventListener("click",()=>NATIVE.exit());const g=document.getElementById("getApp");if(g)g.remove();const r=document.querySelector(".rot");if(r)r.remove();}
 build();connect();
 })();
 </script>

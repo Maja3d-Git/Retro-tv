@@ -202,6 +202,10 @@ class PhonePadActivity : ComponentActivity() {
             }
         }
 
+        /** Przycisk „Zakończ” na padzie – powrót do ekranu startowego aplikacji. */
+        @JavascriptInterface
+        fun exit() = main.post { finish() }
+
         @JavascriptInterface
         fun deviceName(): String = (Build.MODEL ?: "Telefon").take(30)
 

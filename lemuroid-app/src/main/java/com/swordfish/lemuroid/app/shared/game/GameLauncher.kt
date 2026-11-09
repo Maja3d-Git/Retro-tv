@@ -52,6 +52,7 @@ class GameLauncher(
             val system = GameSystem.findById(game.systemId)
             val coreConfig = coresSelection.getCoreConfigForSystem(system)
             gameLaunchTaskHandler.handleGameStart(activity.applicationContext)
+            gameLaunchTaskHandler.markGameStarted(game)
             BaseGameActivity.launchGame(activity, coreConfig, game, loadSave, leanback)
         }
 

@@ -21,6 +21,14 @@ class GameLaunchTaskHandler(
         cancelBackgroundWork(context)
     }
 
+    /** Retro TV: „ostatnio grano” już przy starcie – gra trafia do „Kontynuuj” także po wyjściu przyciskiem Home. */
+    suspend fun markGameStarted(game: Game) {
+        runCatching {
+            val current = retrogradeDb.gameDao().selectById(game.id) ?: game
+            retrogradeDb.gameDao().update(current.copy(lastPlayedAt = System.currentTimeMillis()))
+        }
+    }
+
     suspend fun handleGameFinish(
         enableRatingFlow: Boolean,
         activity: Activity,

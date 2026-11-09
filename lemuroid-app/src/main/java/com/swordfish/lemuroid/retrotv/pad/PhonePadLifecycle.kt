@@ -34,6 +34,7 @@ object PhonePadLifecycle : Application.ActivityLifecycleCallbacks {
 
     fun install(application: Application) {
         if (!TVHelper.isTV(application)) return
+        PadIgnore.load(application)
         application.registerActivityLifecycleCallbacks(this)
         watchPads(application)
     }

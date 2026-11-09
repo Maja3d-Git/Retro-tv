@@ -32,6 +32,6 @@ object PadDetector {
     fun pads(): List<InputDevice> =
         InputDevice.getDeviceIds().toList()
             .mapNotNull { InputDevice.getDevice(it) }
-            .filter { isRealGamepad(it) }
+            .filter { isRealGamepad(it) && !PadIgnore.isIgnored(it) }
             .distinctBy { it.descriptor }
 }

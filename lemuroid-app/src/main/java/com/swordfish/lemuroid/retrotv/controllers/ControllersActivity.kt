@@ -88,6 +88,7 @@ fun ControllersContent(
 ) {
     var pads by remember { mutableStateOf(PadDetector.orderedPads(activity)) }
     var showPairing by remember { mutableStateOf(false) }
+    var hiddenVersion by remember { mutableStateOf(0) }
     val phones by PhonePadServer.phones.collectAsState()
     val serverPort by PhonePadServer.port.collectAsState()
     val visitor by PhonePadServer.lastVisitor.collectAsState()
@@ -129,6 +130,11 @@ fun ControllersContent(
                             pads = PadDetector.orderedPads(activity)
                         })
                     }
+                    TvButton("Ukryj", onClick = {
+                        com.swordfish.lemuroid.retrotv.pad.PadIgnore.hide(activity, pad)
+                        pads = PadDetector.orderedPads(activity)
+                        hiddenVersion++
+                    })
                 }
             }
             phones.forEach { ph ->
@@ -151,6 +157,22 @@ fun ControllersContent(
                 }
             }
             Text("Menu gry z pada: Select + Start (albo L3 + R3).", color = K.muted, fontSize = 14.sp)
+            // Ukryte urządzenia (np. klawiatura rozpoznana jako pad) – można je przywrócić.
+            val hidden = remember(hiddenVersion) { com.swordfish.lemuroid.retrotv.pad.PadIgnore.all() }
+            if (hidden.isNotEmpty()) {
+                Text("Ukryte urządzenia", color = K.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                hidden.forEach { (descriptor, name) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(name, color = K.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        TvButton("Przywróć", onClick = {
+                            com.swordfish.lemuroid.retrotv.pad.PadIgnore.restore(activity, descriptor)
+                            pads = PadDetector.orderedPads(activity)
+                            hiddenVersion++
+                        })
+                    }
+                }
+                Text("Pad Bluetooth usuniesz na stałe w ustawieniach Bluetooth telewizora („Zapomnij”).", color = K.muted, fontSize = 13.sp)
+            }
         }
 
         // ---------- telefon ----------

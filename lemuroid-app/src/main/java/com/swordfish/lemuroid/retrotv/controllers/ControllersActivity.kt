@@ -94,7 +94,8 @@ fun ControllersContent(
     val net = remember { SystemStatus.network(activity) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        runCatching { first.requestFocus() }
+        // W Ustawieniach zaznaczenie zostaje na menu bocznym (nie skaczemy do przycisków).
+        if (!embedded) runCatching { first.requestFocus() }
         while (true) {
             delay(2_000)
             pads = PadDetector.orderedPads(activity)
@@ -103,7 +104,7 @@ fun ControllersContent(
     DisposableEffect(Unit) { onDispose { } }
     BackHandler(enabled = showPairing) { showPairing = false }
 
-    Row(Modifier.fillMaxSize().then(if (embedded) Modifier else Modifier.background(K.bg).padding(horizontal = 48.dp, vertical = 32.dp)), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+    Row(Modifier.fillMaxSize().then(if (embedded) Modifier else Modifier.background(K.bg).padding(horizontal = 48.dp, vertical = 32.dp)), horizontalArrangement = Arrangement.spacedBy(if (embedded) 20.dp else 32.dp)) {
         // ---------- gracze ----------
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Kontrolery", color = K.text, fontSize = 30.sp, fontWeight = FontWeight.Bold, fontFamily = RetroTvTheme.display)
@@ -137,7 +138,8 @@ fun ControllersContent(
                 PlayerRow(player++, "Wolne miejsce", "podłącz pad albo telefon", K.line) {}
             }
             Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Przyciski jeden pod drugim – na węższych ekranach telewizora nie ściskają się.
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 TvButton(
                     "Sparuj pad Bluetooth",
                     primary = pads.isEmpty(),
@@ -153,7 +155,7 @@ fun ControllersContent(
 
         // ---------- telefon ----------
         Column(
-            Modifier.width(400.dp).fillMaxHeight().clip(RoundedCornerShape(20.dp)).background(K.card).padding(22.dp).verticalScroll(rememberScrollState()),
+            Modifier.width(if (embedded) 300.dp else 380.dp).fillMaxHeight().clip(RoundedCornerShape(20.dp)).background(K.card).padding(22.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Telefon jako pad", color = K.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -162,11 +164,11 @@ fun ControllersContent(
                 Text("Telewizor nie jest połączony z siecią.", color = K.coral, fontSize = 15.sp)
             } else {
                 Step(1, "Zainstaluj Retro TV na telefonie", "Zeskanuj aparatem i pobierz plik APK.") {
-                    QrBox(ControllersActivity.APK_URL, 110)
+                    QrBox(ControllersActivity.APK_URL, if (embedded) 90 else 110)
                 }
                 Step(2, "Otwórz aplikację i zeskanuj ten kod", "Przycisk „Zeskanuj kod QR z telewizora”.") {
                     val url = remember(serverPort) { PhonePadServer.pairingUrl(activity, ip) }
-                    QrBox(url, 150)
+                    QrBox(url, if (embedded) 120 else 150)
                 }
                 Text(
                     "Kod do wpisania ręcznie: ${PhonePadServer.token(activity)}",
@@ -210,10 +212,12 @@ private fun PlayerRow(
     dot: Color,
     actions: @Composable () -> Unit,
 ) {
-    Row(
+    // Przyciski pod nazwą – na węższych ekranach telewizora nazwa pada się nie ściska.
+    Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(K.card).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(40.dp).clip(CircleShape).background(K.bg), contentAlignment = Alignment.Center) {
             Text("$player", color = K.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
@@ -226,7 +230,8 @@ private fun PlayerRow(
                 Text(detail, color = K.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
+    }
+        Row(Modifier.padding(start = 54.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
     }
 }
 

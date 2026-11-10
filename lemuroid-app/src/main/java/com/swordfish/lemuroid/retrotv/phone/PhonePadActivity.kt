@@ -309,6 +309,18 @@ class PhonePadActivity : ComponentActivity() {
         }, 4_000)
     }
 
+    private fun retryHello(attempt: Int) {
+        main.postDelayed({
+            if (welcomed || destroyed || !relayReady) return@postDelayed
+            if (attempt < 5) {
+                opened()
+                retryHello(attempt + 1)
+            } else {
+                status("Telewizor nie odpowiada. Sprawdź, czy Retro TV jest otwarte na telewizorze (ekran główny albo gra).")
+            }
+        }, 3_000)
+    }
+
     private fun startRelay() {
         if (destroyed || relay != null) return
         status("Łączę przez internet…")
@@ -331,11 +343,8 @@ class PhonePadActivity : ComponentActivity() {
                         status("Połączono przez internet – czekam na telewizor…")
                         js("window.rtvLink='internet (możliwe opóźnienie)'")
                         opened()
-                        main.postDelayed({
-                            if (!welcomed && !destroyed) {
-                                status("Telewizor nie odpowiada. Sprawdź, czy Retro TV jest otwarte na telewizorze (ekran główny albo gra).")
-                            }
-                        }, 10_000)
+                        // Telewizor mógł jeszcze nie nasłuchiwać (np. przełączał się na grę) – ponawiamy „hello”.
+                        retryHello(0)
                     } else {
                         status("Brak internetu. Sprawdź połączenie telefonu.")
                     }

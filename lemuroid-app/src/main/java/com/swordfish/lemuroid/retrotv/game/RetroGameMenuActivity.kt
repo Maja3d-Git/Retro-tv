@@ -185,8 +185,27 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                             MenuItem("Zapisz stan", "wybierz slot") { page = Page.SAVE }
                             MenuItem("Wczytaj stan", if (slots.any { it.first.exists }) "wybierz slot" else "brak zapisów", enabled = slots.any { it.first.exists }) { page = Page.LOAD }
                         }
+                        if (states) {
+                            MenuItem("Cofnij grę", "o 10 sekund") {
+                                finishWith { putExtra(com.swordfish.lemuroid.app.shared.game.BaseGameActivity.RETROTV_REWIND, 10) }
+                            }
+                            MenuItem("Cofnij grę", "o 30 sekund") {
+                                finishWith { putExtra(com.swordfish.lemuroid.app.shared.game.BaseGameActivity.RETROTV_REWIND, 30) }
+                            }
+                        }
                         MenuItem("Zacznij od nowa") { finishWith { putExtra(GameMenuContract.RESULT_RESET, true) } }
                         MenuLabel("OPCJE")
+                        // Obraz tylko dla tej gry (od następnego uruchomienia).
+                        val gamePrefs = remember { getSharedPreferences("retrotv", MODE_PRIVATE) }
+                        val shaderKey = "shader_game_${game.id}"
+                        var shader by remember { mutableStateOf(gamePrefs.getString(shaderKey, null)) }
+                        val shaderNames = listOf(null to "jak w ustawieniach", "sharp" to "ostry", "smooth" to "gładki", "crt" to "CRT", "lcd" to "LCD")
+                        MenuItem("Obraz tej gry", shaderNames.first { it.first == shader }.second) {
+                            val next = shaderNames[(shaderNames.indexOfFirst { it.first == shader } + 1) % shaderNames.size].first
+                            shader = next
+                            gamePrefs.edit().apply { if (next == null) remove(shaderKey) else putString(shaderKey, next) }.apply()
+                            android.widget.Toast.makeText(this@RetroGameMenuActivity, "Zmiana obrazu po ponownym uruchomieniu gry", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                         if (ffSupported) {
                             MenuItem("Przyspieszenie", if (ff) "włączone" else "wyłączone") {
                                 finishWith { putExtra(GameMenuContract.RESULT_ENABLE_FAST_FORWARD, !ff) }
@@ -196,7 +215,6 @@ class RetroGameMenuActivity : ImmersiveActivity() {
                             finishWith { putExtra(GameMenuContract.RESULT_ENABLE_AUDIO, !audio) }
                         }
                         if (disks > 1) MenuItem("Zmień płytę", "płyta ${currentDisk + 1} z $disks") { page = Page.DISK }
-                        MenuItem("Ustawienia emulatora", "filtry, rdzeń") { openLegacyMenu() }
                         MenuLabel("ONLINE")
                         if (netplay.active) {
                             MenuItem("Pokój ${netplay.code}", "goście: ${netplay.guests.count { it.connected }}") { page = Page.NETPLAY }

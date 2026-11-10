@@ -90,7 +90,10 @@ class GameViewModelRetroGameView(
         if (currentState != GameState.Uninitialized) return
 
         val autoSaveEnabled = settingsManager.autoSave()
-        val filter = settingsManager.screenFilter()
+        // Retro TV: obraz ustawiony dla tej gry (menu gry → Obraz tej gry) ma pierwszeństwo.
+        val filter =
+            appContext.getSharedPreferences("retrotv", Context.MODE_PRIVATE).getString("shader_game_${game.id}", null)
+                ?: settingsManager.screenFilter()
         val hdMode = settingsManager.hdMode()
         val hdModeQuality = settingsManager.hdModeQuality()
         val alignment = settingsManager.viewportAlignment()

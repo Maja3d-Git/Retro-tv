@@ -237,6 +237,49 @@ class BaseGameScreenViewModel(
         return touchControls.isMenuPressed()
     }
 
+    // ---------- Retro TV: cofanie gry ----------
+
+    private val rewindSupported = systemCoreConfig.statesSupported
+    private val rewindStates = ArrayDeque<ByteArray>()
+    private var rewindBytes = 0L
+    private var rewindJob: kotlinx.coroutines.Job? = null
+
+    /** Co sekundę zapamiętuje stan gry (najwyżej ~60 s i 48 MB), żeby móc cofnąć grę z menu. */
+    fun startRewindRecording() {
+        if (rewindJob != null || !rewindSupported) return
+        rewindJob =
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                while (true) {
+                    kotlinx.coroutines.delay(1_000)
+                    val view = retroGameView.retroGameView ?: continue
+                    val state = runCatching { view.serializeState(true) }.getOrNull() ?: continue
+                    synchronized(rewindStates) {
+                        // Pauza (menu): stan się nie zmienia – nie zapisujemy kopii.
+                        if (rewindStates.lastOrNull()?.contentEquals(state) == true) return@synchronized
+                        rewindStates.addLast(state)
+                        rewindBytes += state.size
+                        while (rewindStates.size > 60 || rewindBytes > 48L * 1024 * 1024) {
+                            rewindBytes -= rewindStates.removeFirst().size
+                        }
+                    }
+                }
+            }
+    }
+
+    /** Cofa grę o [seconds] sekund (albo do najstarszego zapamiętanego stanu). */
+    fun rewind(seconds: Int): Boolean {
+        val view = retroGameView.retroGameView ?: return false
+        val state =
+            synchronized(rewindStates) {
+                if (rewindStates.isEmpty()) return false
+                val index = (rewindStates.size - 1 - seconds).coerceAtLeast(0)
+                val chosen = rewindStates.elementAt(index)
+                while (rewindStates.size > index + 1) rewindBytes -= rewindStates.removeLast().size
+                chosen
+            }
+        return runCatching { view.unserializeState(state) }.getOrDefault(false)
+    }
+
     suspend fun saveSlot(index: Int) {
         if (loadingState.value) return
         withLoading {

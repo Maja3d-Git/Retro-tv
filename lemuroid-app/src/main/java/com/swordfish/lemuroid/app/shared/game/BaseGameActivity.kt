@@ -124,6 +124,7 @@ abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
         baseGameScreenViewModel = viewModel
 
         lifecycle.addObserver(baseGameScreenViewModel)
+        baseGameScreenViewModel.startRewindRecording()
 
         // Retro TV: gra uruchomiona z pokoju („Z drużyną”) – od razu prosimy o zgodę na przesyłanie obrazu.
         if (savedInstanceState == null && com.swordfish.lemuroid.retrotv.netplay.NetplayHostService.state.value.lobby) {
@@ -435,6 +436,9 @@ abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
             return
         }
         if (requestCode == DIALOG_REQUEST) {
+            data?.getIntExtra(RETROTV_REWIND, 0)?.takeIf { it > 0 }?.let { seconds ->
+                if (!baseGameScreenViewModel.rewind(seconds)) displayToast("Nie ma jeszcze czego cofnąć")
+            }
             when (data?.getStringExtra(RETROTV_NETPLAY)) {
                 "start" -> {
                     val manager = getSystemService(android.media.projection.MediaProjectionManager::class.java)
@@ -498,6 +502,7 @@ abstract class BaseGameActivity : ImmersiveActivity(), PadSinkProvider {
         const val DIALOG_REQUEST = 100
         const val NETPLAY_PROJECTION_REQUEST = 4711
         const val RETROTV_NETPLAY = "RETROTV_NETPLAY"
+        const val RETROTV_REWIND = "RETROTV_REWIND"
 
         private const val EXTRA_GAME = "GAME"
         private const val EXTRA_LOAD_SAVE = "LOAD_SAVE"

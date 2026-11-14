@@ -50,6 +50,23 @@ class PhoneHomeActivity : ComponentActivity() {
     companion object {
         /** Otwiera zwykły emulator Lemuroid na telefonie zamiast ekranu Retro TV. */
         const val EXTRA_PHONE_EMULATOR = "retrotv.phone_emulator"
+
+        /** Pad trafił na telewizor z innym kodem – od razu skaner i komunikat. */
+        const val EXTRA_REPAIR = "retrotv.repair"
+    }
+
+    private var repairMessage by androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleRepair(intent)
+    }
+
+    private fun handleRepair(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_REPAIR, false) != true) return
+        intent.removeExtra(EXTRA_REPAIR)
+        repairMessage = "Ten telewizor ma inny kod. Zeskanuj kod QR z ekranu Kontrolery (zębatka → Kontrolery)."
+        scanQr { repairMessage = it }
     }
 
     private val prefs by lazy { getSharedPreferences("retrotv_share", Context.MODE_PRIVATE) }
@@ -107,6 +124,7 @@ class PhoneHomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         RetroTvTheme.apply(this)
         setContent { RetroTvContent { Screen() } }
+        handleRepair(intent)
     }
 
     /** Wysyła plik aplikacji na telewizor (PUT /upload), który sam uruchamia instalator. */
@@ -141,7 +159,7 @@ class PhoneHomeActivity : ComponentActivity() {
 
     @Composable
     private fun Screen() {
-        var code by remember { mutableStateOf(prefs.getString("code", "") ?: "") }
+        var code by remember(repairMessage) { mutableStateOf(prefs.getString("code", "") ?: "") }
         var error by remember { mutableStateOf<String?>(null) }
         var tvStatus by remember { mutableStateOf<String?>(null) }
         var release by remember { mutableStateOf<com.swordfish.lemuroid.retrotv.update.ReleaseInfo?>(null) }
@@ -203,7 +221,7 @@ class PhoneHomeActivity : ComponentActivity() {
             }
             updateStatus?.let { Text(it, color = K.muted, fontSize = 14.sp) }
 
-            val remembered = remember { prefs.getString("last_host", null)?.takeIf { code.isNotBlank() } }
+            val remembered = remember(repairMessage, code) { prefs.getString("last_host", null)?.takeIf { code.isNotBlank() } }
             Text(
                 if (remembered != null) "Telewizor: ${remembered.substringBefore(':')}" else "Telefon nie jest jeszcze sparowany z telewizorem",
                 color = if (remembered != null) K.ok else K.muted,
@@ -264,6 +282,7 @@ class PhoneHomeActivity : ComponentActivity() {
                     }
                 }
             }
+            repairMessage?.let { Text(it, color = K.coral, fontSize = 14.sp) }
             tvStatus?.let { Text(it, color = K.text, fontSize = 14.sp) }
             error?.let { Text(it, color = K.coral, fontSize = 14.sp) }
 

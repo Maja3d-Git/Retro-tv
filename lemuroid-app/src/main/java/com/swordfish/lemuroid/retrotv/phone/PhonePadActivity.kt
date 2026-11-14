@@ -284,7 +284,10 @@ class PhonePadActivity : ComponentActivity() {
                     remote: Boolean,
                 ) {
                     if (lan === this) lan = null
-                    if (wasOpen) {
+                    if (code == 4001) {
+                        // Kod z innego telewizora (np. po zmianie telewizora): zapominamy go i otwieramy skaner.
+                        main.post { repair() }
+                    } else if (wasOpen) {
                         closed(code, reason ?: "")
                     } else {
                         Timber.w("Pad: sieć domowa niedostępna (%d %s)", code, reason)
@@ -307,6 +310,17 @@ class PhonePadActivity : ComponentActivity() {
                 fail()
             }
         }, 4_000)
+    }
+
+    private fun repair() {
+        if (destroyed) return
+        prefs.edit().remove("last_host").remove("code").apply()
+        startActivity(
+            Intent(this, PhoneHomeActivity::class.java)
+                .putExtra(PhoneHomeActivity.EXTRA_REPAIR, true)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        )
+        finish()
     }
 
     private fun retryHello(attempt: Int) {
